@@ -1,178 +1,140 @@
-import { Button } from "@/components/ui/button"
+import { Link } from 'react-router-dom';
 
 export function Footer() {
   return (
-    <footer className="bg-gray-900 text-white">
-      {/* Back to top */}
-      <div className="bg-gray-700 py-4 text-center">
-        <Button variant="ghost" className="text-white hover:text-gray-300"
-         onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
-          Back to top
-        </Button>
-      </div>
+    <footer className="mt-12 border-t-2 border-cyan-200 bg-white">
+      <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
+        <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
+          {/* Brand */}
+          <div className="space-y-4">
+            <Link
+              to="/"
+              className="flex items-center space-x-3 transition-opacity hover:opacity-80"
+            >
+              <img
+                src="/Logo2.png"
+                alt="EduLit Logo"
+                className="h-10 w-10 object-contain"
+              />
+              <span
+                className="text-3xl font-bold text-cyan-600"
+                style={{ fontFamily: 'LatoBlack, sans-serif' }}
+              >
+                EduLit
+              </span>
+            </Link>
+            <p className="max-w-sm text-gray-600">
+              A literature education website for teachers, students and everyone
+            </p>
+          </div>
 
-      {/* Main footer */}
-      <div className="max-w-7xl mx-auto px-4 py-12">
-        <div className="grid md:grid-cols-4 gap-8">
+          {/* Quick Links */}
           <div>
-            <h3 className="font-bold mb-4">Get to Know Us</h3>
-            <ul className="space-y-2 text-sm">
+            <h3
+              className="mb-4 text-lg font-bold text-gray-800"
+              style={{ fontFamily: 'LatoBlack, sans-serif' }}
+            >
+              Quick Links
+            </h3>
+            <ul className="space-y-3">
               <li>
-                <a href="#" className="hover:underline">
-                  Careers
-                </a>
+                <Link
+                  to="/"
+                  className="text-gray-700 transition-colors hover:text-cyan-600"
+                >
+                  Home Page
+                </Link>
               </li>
               <li>
-                <a href="#" className="hover:underline">
-                  Blog
-                </a>
+                <Link
+                  to="/lesson"
+                  className="text-gray-700 transition-colors hover:text-cyan-600"
+                >
+                  Lesson
+                </Link>
               </li>
               <li>
-                <a href="#" className="hover:underline">
-                  About Amazon
-                </a>
-              </li>
-              <li>
-                <a href="#" className="hover:underline">
-                  Investor Relations
-                </a>
-              </li>
-              <li>
-                <a href="#" className="hover:underline">
-                  Amazon Devices
-                </a>
+                <Link
+                  to="/course"
+                  className="text-gray-700 transition-colors hover:text-cyan-600"
+                >
+                  Course
+                </Link>
               </li>
             </ul>
           </div>
 
+          {/* Support */}
           <div>
-            <h3 className="font-bold mb-4">Make Money with Us</h3>
-            <ul className="space-y-2 text-sm">
+            <h3
+              className="mb-4 text-lg font-bold text-gray-800"
+              style={{ fontFamily: 'LatoBlack, sans-serif' }}
+            >
+              Support
+            </h3>
+            <ul className="space-y-3">
               <li>
-                <a href="#" className="hover:underline">
-                  Sell products on Amazon
-                </a>
+                <Link
+                  to="/signin"
+                  className="text-gray-700 transition-colors hover:text-cyan-600"
+                >
+                  Log in
+                </Link>
               </li>
               <li>
-                <a href="#" className="hover:underline">
-                  Sell on Amazon Business
-                </a>
-              </li>
-              <li>
-                <a href="#" className="hover:underline">
-                  Sell apps on Amazon
-                </a>
-              </li>
-              <li>
-                <a href="#" className="hover:underline">
-                  Become an Affiliate
-                </a>
-              </li>
-              <li>
-                <a href="#" className="hover:underline">
-                  Advertise Your Products
-                </a>
+                <Link
+                  to="/signup"
+                  className="text-gray-700 transition-colors hover:text-cyan-600"
+                >
+                  Sign up
+                </Link>
               </li>
             </ul>
           </div>
 
+          {/* Contact */}
           <div>
-            <h3 className="font-bold mb-4">Amazon Payment Products</h3>
-            <ul className="space-y-2 text-sm">
-              <li>
-                <a href="#" className="hover:underline">
-                  Amazon Business Card
-                </a>
-              </li>
-              <li>
-                <a href="#" className="hover:underline">
-                  Shop with Points
-                </a>
-              </li>
-              <li>
-                <a href="#" className="hover:underline">
-                  Reload Your Balance
-                </a>
-              </li>
-              <li>
-                <a href="#" className="hover:underline">
-                  Amazon Currency Converter
-                </a>
-              </li>
-            </ul>
-          </div>
-
-          <div>
-            <h3 className="font-bold mb-4">Let Us Help You</h3>
-            <ul className="space-y-2 text-sm">
-              <li>
-                <a href="#" className="hover:underline">
-                  Amazon and COVID-19
-                </a>
-              </li>
-              <li>
-                <a href="#" className="hover:underline">
-                  Your Account
-                </a>
-              </li>
-              <li>
-                <a href="#" className="hover:underline">
-                  Your Orders
-                </a>
-              </li>
-              <li>
-                <a href="#" className="hover:underline">
-                  Shipping Rates & Policies
-                </a>
-              </li>
-              <li>
-                <a href="#" className="hover:underline">
-                  Returns & Replacements
-                </a>
-              </li>
+            <h3
+              className="mb-4 text-lg font-bold text-gray-800"
+              style={{ fontFamily: 'LatoBlack, sans-serif' }}
+            >
+              Contact
+            </h3>
+            <ul className="space-y-3 text-gray-700">
+              <li>EduLitPRN@gmail.com</li>
+              <li>+98 12345678</li>
             </ul>
           </div>
         </div>
-      </div>
 
-      {/* Bottom footer */}
-      <div className="border-t border-gray-700 py-6">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between">
-          <div className="flex items-center space-x-6 mb-4 md:mb-0">
-            <h2 className="text-xl font-bold">amazon</h2>
-            <select className="bg-gray-800 border border-gray-600 rounded px-3 py-1 text-sm">
-              <option>🇺🇸 English</option>
-              <option>🇪🇸 Español</option>
-              <option>🇫🇷 Français</option>
-            </select>
-            <select className="bg-gray-800 border border-gray-600 rounded px-3 py-1 text-sm">
-              <option>$ USD - U.S. Dollar</option>
-              <option>€ EUR - Euro</option>
-              <option>£ GBP - British Pound</option>
-            </select>
-            <select className="bg-gray-800 border border-gray-600 rounded px-3 py-1 text-sm">
-              <option>🇺🇸 United States</option>
-              <option>🇨🇦 Canada</option>
-              <option>🇬🇧 United Kingdom</option>
-            </select>
-          </div>
-        </div>
-
-        <div className="max-w-7xl mx-auto px-4 mt-6">
-          <div className="flex flex-wrap justify-center space-x-6 text-xs text-gray-400">
-            <a href="#" className="hover:underline">
-              Conditions of Use
-            </a>
-            <a href="#" className="hover:underline">
-              Privacy Notice
-            </a>
-            <a href="#" className="hover:underline">
-              Your Ads Privacy Choices
-            </a>
-            <span>© 1996-2024, Amazon.com, Inc. or its affiliates</span>
+        {/* Bottom bar */}
+        <div className="mt-10 flex flex-col items-center justify-between border-t border-cyan-200 pt-6 md:flex-row">
+          <p className="text-sm text-gray-500">
+            © 2025 <span className="font-medium">EduLit</span>. All rights
+            reserved.
+          </p>
+          <div className="mt-4 flex items-center space-x-6 md:mt-0">
+            <Link
+              to="/privacy"
+              className="text-sm text-gray-600 transition-colors hover:text-cyan-600"
+            >
+              Privacy Policy
+            </Link>
+            <Link
+              to="/terms"
+              className="text-sm text-gray-600 transition-colors hover:text-cyan-600"
+            >
+              Terms of Service
+            </Link>
+            <Link
+              to="/cookies"
+              className="text-sm text-gray-600 transition-colors hover:text-cyan-600"
+            >
+              Cookies
+            </Link>
           </div>
         </div>
       </div>
     </footer>
-  )
+  );
 }
