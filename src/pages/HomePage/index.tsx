@@ -1,4 +1,4 @@
-import { Header } from './components/header';
+import Navbar from '../../components/shared/navbar';
 import { HeroBanner } from './components/hero-banner';
 import { CategoryGrid } from './components/category-grid';
 import { ProductCarousel } from './components/product-carousel';
@@ -8,7 +8,7 @@ import { Footer } from './components/footer';
 export default function HomePage() {
   return (
     <div className="min-h-screen bg-white">
-      <Header />
+      <Navbar />
       <main>
         <HeroBanner />
         <CategoryGrid />
