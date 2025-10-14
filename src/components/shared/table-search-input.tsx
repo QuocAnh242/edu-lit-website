@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import { Input } from '../ui/input';
 import { useDebounce } from 'use-debounce';
 import { useSearchParams } from 'react-router-dom';
@@ -10,7 +10,7 @@ export default function TableSearchInput({
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const country = searchParams.get('search') || '';
-  const [searchTerm, setSearchTerm] = React.useState(country);
+  const [searchTerm, setSearchTerm] = useState(country);
   // debounce the search input
   const [debouncedValue] = useDebounce(searchTerm, 1000);
   const handleSettingSearchParams = useCallback((newSearchValue: string) => {
@@ -31,7 +31,7 @@ export default function TableSearchInput({
     });
   }, []);
 
-  React.useEffect(() => {
+  useEffect(() => {
     handleSettingSearchParams(debouncedValue);
   }, [debouncedValue, handleSettingSearchParams]);
   return (
