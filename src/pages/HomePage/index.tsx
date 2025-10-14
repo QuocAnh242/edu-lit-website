@@ -1,4 +1,4 @@
-import { Header } from './components/header';
+/*import { Header } from './components/header';
 import { HeroBanner } from './components/hero-banner';
 import { CategoryGrid } from './components/category-grid';
 import { ProductCarousel } from './components/product-carousel';
@@ -20,4 +20,6 @@ export default function HomePage() {
       <Footer />
     </div>
   );
-}
+}*/
+
+export { default } from './HomePage';

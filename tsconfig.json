@@ -16,6 +16,9 @@
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
+    // để tránh TypeScript cố tìm những type không có.
+    "allowSyntheticDefaultImports": true,
+    "types": ["vite/client"],
 
     /* Linting */
     "strict": true,
