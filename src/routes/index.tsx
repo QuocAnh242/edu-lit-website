@@ -8,7 +8,10 @@ const DashboardLayout = lazy(
 );
 
 const SignInPage = lazy(() => import('@/pages/auth/signin'));
+const SignUpPage = lazy(() => import('@/pages/auth/signup'));
 const HomePage = lazy(() => import('@/pages/HomePage/index'));
+const LessonPage = lazy(() => import('@/pages/Lesson/index'));
+const CoursePage = lazy(() => import('@/pages/Course/index'));
 // ----------------------------------------------------------------------
 
 export default function AppRouter() {
@@ -26,6 +29,14 @@ export default function AppRouter() {
           path: '/',
           element: <HomePage />,
           index: true
+        },
+        {
+          path: '/lesson',
+          element: <LessonPage />
+        },
+        {
+          path: '/course',
+          element: <CoursePage />
         }
       ]
     }
@@ -33,11 +44,13 @@ export default function AppRouter() {
 
   const publicRoutes = [
     {
-      path: '/login',
-      element: <SignInPage />,
-      index: true
+      path: '/signin',
+      element: <SignInPage />
     },
-
+    {
+      path: '/signup',
+      element: <SignUpPage />
+    },
     {
       path: '/404',
       element: <NotFound />
