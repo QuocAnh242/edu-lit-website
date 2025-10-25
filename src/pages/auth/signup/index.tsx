@@ -12,13 +12,15 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import Bg from '@/assets/bg.jpg';
 import { Separator } from '@/components/ui/separator';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 import { Eye, EyeOff } from 'lucide-react';
+import { registerUser } from '@/services/auth.api';
+import { useToast } from '@/components/ui/use-toast';
 
 // Form validation schema
 const signupSchema = z
@@ -40,10 +42,7 @@ const signupSchema = z
       .email({ message: 'Email không hợp lệ' }),
     password: z
       .string()
-      .min(6, { message: 'Mật khẩu phải có ít nhất 6 ký tự' })
-      .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/, {
-        message: 'Mật khẩu phải chứa ít nhất 1 chữ thường, 1 chữ hoa và 1 số'
-      }),
+      .min(6, { message: 'Mật khẩu phải có ít nhất 6 ký tự' }),
     repeatPassword: z.string()
   })
   .refine((data) => data.password === data.repeatPassword, {
@@ -54,6 +53,8 @@ const signupSchema = z
 type SignupFormValues = z.infer<typeof signupSchema>;
 
 export default function SignUpPage() {
+  const navigate = useNavigate();
+  const { toast } = useToast();
   const [showPassword, setShowPassword] = useState(false);
   const [showRepeatPassword, setShowRepeatPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -75,23 +76,69 @@ export default function SignUpPage() {
     setError(null);
 
     try {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-
-      console.log('Signup data:', {
+      // Call register API
+      const response = await registerUser({
         username: data.username,
-        fullname: data.fullname,
+        fullName: data.fullname,
         email: data.email,
         password: data.password
       });
 
-      // Mock successful registration
-      alert(
-        'Đăng ký thành công! Vui lòng kiểm tra email để xác thực tài khoản.'
-      );
-      form.reset();
-    } catch (err) {
-      setError('Đã xảy ra lỗi. Vui lòng thử lại.');
+      if (response.success) {
+        // Store token if needed
+        if (response.data.token) {
+          localStorage.setItem('token', response.data.token);
+          localStorage.setItem(
+            'user',
+            JSON.stringify({
+              id: response.data.id,
+              username: response.data.username,
+              email: response.data.email,
+              fullName: response.data.fullName,
+              roleName: response.data.roleName
+            })
+          );
+        }
+
+        // Show success toast
+        toast({
+          title: 'Đăng ký thành công!',
+          description: response.message || 'Chào mừng bạn đến với EduLit.',
+          variant: 'default'
+        });
+
+        // Redirect to signin page or dashboard after a short delay
+        setTimeout(() => {
+          navigate('/signin');
+        }, 1500);
+      } else {
+        setError(response.message || 'Đăng ký thất bại. Vui lòng thử lại.');
+        toast({
+          title: 'Đăng ký thất bại',
+          description: response.message || 'Vui lòng thử lại.',
+          variant: 'destructive'
+        });
+      }
+    } catch (err: any) {
+      console.error('Register error:', err);
+
+      // Handle error response
+      let errorMessage = 'Đã xảy ra lỗi. Vui lòng thử lại.';
+
+      if (err.response?.data?.message) {
+        errorMessage = err.response.data.message;
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+
+      setError(errorMessage);
+
+      // Show error toast
+      toast({
+        title: 'Lỗi đăng ký',
+        description: errorMessage,
+        variant: 'destructive'
+      });
     } finally {
       setIsLoading(false);
     }
