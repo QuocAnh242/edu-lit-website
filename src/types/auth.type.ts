@@ -23,3 +23,27 @@ export interface RegisterResponse {
   data: RegisterData;
   errorCode: string | null;
 }
+
+// Login Types
+export interface LoginRequest {
+  username: string;
+  password: string;
+}
+
+export interface LoginData {
+  id: string;
+  username: string;
+  email: string;
+  fullName: string;
+  roleId: string;
+  roleName: string;
+  token: string;
+  createdAt: string;
+}
+
+export interface LoginResponse {
+  success: boolean;
+  message: string;
+  data: LoginData;
+  errorCode: string | null;
+}

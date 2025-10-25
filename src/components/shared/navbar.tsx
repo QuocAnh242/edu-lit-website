@@ -1,7 +1,42 @@
-import React from 'react';
-import { Link, NavLink } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, NavLink, useNavigate } from 'react-router-dom';
+import helpers from '@/helpers';
 
 const Navbar = () => {
+  const navigate = useNavigate();
+  const [user, setUser] = useState<any>(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  useEffect(() => {
+    // Check if user is logged in
+    const token = helpers.cookie_get('AT');
+    const userStr = localStorage.getItem('user');
+
+    if (token && userStr) {
+      try {
+        const userData = JSON.parse(userStr);
+        setUser(userData);
+        setIsLoggedIn(true);
+      } catch (error) {
+        console.error('Error parsing user data:', error);
+      }
+    }
+  }, []);
+
+  const handleLogout = () => {
+    // Clear all auth data
+    helpers.cookie_delete('AT');
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+
+    // Reset state
+    setUser(null);
+    setIsLoggedIn(false);
+
+    // Redirect to signin
+    navigate('/signin');
+  };
+
   return (
     <nav className="sticky top-0 z-50 border-b-2 border-cyan-200 bg-white shadow-lg">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -69,22 +104,43 @@ const Navbar = () => {
             Course
           </NavLink>
 
-          {/* Right side - Auth Buttons */}
+          {/* Right side - Auth Buttons or User Info */}
           <div className="flex items-center space-x-4">
-            <Link
-              to="/signin"
-              className="rounded-md border border-cyan-600 px-4 py-2 text-base font-medium text-cyan-600 transition-all duration-200 hover:bg-cyan-50 hover:text-cyan-700"
-              style={{ fontFamily: 'LatoBlack, sans-serif' }}
-            >
-              Log In
-            </Link>
-            <Link
-              to="/signup"
-              className="rounded-md bg-cyan-600 px-4 py-2 text-base font-medium text-white transition-colors duration-200 hover:bg-cyan-700"
-              style={{ fontFamily: 'LatoBlack, sans-serif' }}
-            >
-              Sign Up
-            </Link>
+            {isLoggedIn && user ? (
+              <>
+                <span
+                  className="text-base font-medium text-gray-700"
+                  style={{ fontFamily: 'LatoBlack, sans-serif' }}
+                >
+                  Welcome,{' '}
+                  <span className="text-cyan-600">{user.fullName}</span>
+                </span>
+                <button
+                  onClick={handleLogout}
+                  className="rounded-md bg-red-600 px-4 py-2 text-base font-medium text-white transition-colors duration-200 hover:bg-red-700"
+                  style={{ fontFamily: 'LatoBlack, sans-serif' }}
+                >
+                  Log Out
+                </button>
+              </>
+            ) : (
+              <>
+                <Link
+                  to="/signin"
+                  className="rounded-md border border-cyan-600 px-4 py-2 text-base font-medium text-cyan-600 transition-all duration-200 hover:bg-cyan-50 hover:text-cyan-700"
+                  style={{ fontFamily: 'LatoBlack, sans-serif' }}
+                >
+                  Log In
+                </Link>
+                <Link
+                  to="/signup"
+                  className="rounded-md bg-cyan-600 px-4 py-2 text-base font-medium text-white transition-colors duration-200 hover:bg-cyan-700"
+                  style={{ fontFamily: 'LatoBlack, sans-serif' }}
+                >
+                  Sign Up
+                </Link>
+              </>
+            )}
           </div>
 
           {/* Mobile menu button */}

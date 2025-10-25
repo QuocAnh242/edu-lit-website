@@ -8,13 +8,13 @@ import {
   FormMessage
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import __helpers from '@/helpers';
-import { useLogin } from '@/queries/auth.query';
-import { useGetMyInfo } from '@/queries/user.query';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
+import { useNavigate } from 'react-router-dom';
 import * as z from 'zod';
+import { loginUser } from '@/services/auth.api';
+import { useToast } from '@/components/ui/use-toast';
 const formSchema = z.object({
   username: z
     .string()
@@ -25,54 +25,78 @@ const formSchema = z.object({
 type UserFormValue = z.infer<typeof formSchema>;
 
 export default function UserAuthForm() {
+  const navigate = useNavigate();
+  const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const { mutateAsync: login } = useLogin();
-  const [queryError, setQueryError] = useState<string | null>(null);
+
   const defaultValues = {
     username: '',
     password: ''
   };
-  const { data: dataInfoUser, refetch } = useGetMyInfo();
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const error = params.get('error');
-    if (error) {
-      setQueryError(decodeURIComponent(error));
-    }
-  }, []);
 
   const form = useForm<UserFormValue>({
     resolver: zodResolver(formSchema),
     defaultValues
   });
 
-  useEffect(() => {
-    if (dataInfoUser) {
-      console.log(dataInfoUser);
-      window.location.href = '/dashboard';
-    }
-  }, [dataInfoUser]);
-
   const onSubmit = async (data: UserFormValue) => {
     setLoading(true);
     try {
-      const model = {
+      const response = await loginUser({
         username: data.username,
         password: data.password
-      };
-      const res = await login(model);
-      console.log(res);
-      if (res) {
-        const token = res.data;
-        __helpers.cookie_set('AT', token);
-        refetch();
-        // window.location.href = '/';
+      });
+
+      if (response.success) {
+        // Show success toast
+        toast({
+          title: 'Đăng nhập thành công!',
+          description: `Chào mừng ${response.data.fullName}`,
+          variant: 'default'
+        });
+
+        setTimeout(() => {
+          window.location.href = '/';
+        }, 1500);
+      } else {
+        // Handle unsuccessful response
+        form.setError('password', {
+          type: 'manual',
+          message: response.message || 'Đăng nhập thất bại'
+        });
+
+        toast({
+          title: 'Đăng nhập thất bại',
+          description:
+            response.message || 'Vui lòng kiểm tra lại thông tin đăng nhập',
+          variant: 'destructive'
+        });
       }
     } catch (err: any) {
+      console.error('Login error:', err);
+
+      // Handle error response
+      let errorMessage = 'Tên đăng nhập hoặc mật khẩu không đúng';
+
+      if (err.response?.data?.message) {
+        errorMessage = err.response.data.message;
+      } else if (err.response?.data?.errors) {
+        // Handle validation errors from backend
+        const errors = err.response.data.errors;
+        errorMessage = Object.values(errors).flat().join(', ');
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+
       form.setError('password', {
         type: 'manual',
-        message: err?.data?.message || 'Tên đăng nhập hoặc mật khẩu không đúng'
+        message: errorMessage
+      });
+
+      toast({
+        title: 'Lỗi đăng nhập',
+        description: errorMessage,
+        variant: 'destructive'
       });
     } finally {
       setLoading(false);
@@ -122,12 +146,8 @@ export default function UserAuthForm() {
           )}
         />
 
-        {queryError && (
-          <p className="text-center text-sm text-red-500">{queryError}</p>
-        )}
-
         <Button disabled={loading} className="ml-auto w-full" type="submit">
-          Đăng nhập
+          {loading ? 'Đang đăng nhập...' : 'Đăng nhập'}
         </Button>
       </form>
     </Form>

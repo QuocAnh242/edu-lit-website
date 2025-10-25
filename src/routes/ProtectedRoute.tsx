@@ -6,7 +6,7 @@ function ProtectedRoute({ children }) {
   const isAuth = isAuthenticated();
 
   if (!isAuth) {
-    return (window.location.href = '/login');
+    return (window.location.href = '/signin');
   }
 
   return children;
