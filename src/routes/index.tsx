@@ -12,6 +12,8 @@ const SignUpPage = lazy(() => import('@/pages/auth/signup'));
 const HomePage = lazy(() => import('@/pages/HomePage/index'));
 const LessonPage = lazy(() => import('@/pages/Lesson/index'));
 const CoursePage = lazy(() => import('@/pages/Course/index'));
+const CreateQuestionPage = lazy(() => import('@/pages/CreateQuestionPage'));
+const QuestionsPage = lazy(() => import('@/pages/QuestionsPage'));
 // ----------------------------------------------------------------------
 
 export default function AppRouter() {
@@ -37,6 +39,14 @@ export default function AppRouter() {
         {
           path: '/course',
           element: <CoursePage />
+        },
+        {
+          path: '/questions',
+          element: <QuestionsPage />
+        },
+        {
+          path: '/questions/create',
+          element: <CreateQuestionPage />
         }
       ]
     }
