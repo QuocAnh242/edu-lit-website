@@ -148,6 +148,19 @@ export default function SignInPage() {
                 </svg>
                 Google
               </Button>
+
+              {/* Sign up link */}
+              <div className="text-center">
+                <p className="text-sm text-muted-foreground">
+                  Chưa có tài khoản?{' '}
+                  <Link
+                    to="/signup"
+                    className="text-primary underline underline-offset-4 hover:text-primary/80"
+                  >
+                    Đăng ký ngay
+                  </Link>
+                </p>
+              </div>
             </>
           )}
 

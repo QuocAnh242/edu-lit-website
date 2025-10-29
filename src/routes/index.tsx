@@ -8,7 +8,12 @@ const DashboardLayout = lazy(
 );
 
 const SignInPage = lazy(() => import('@/pages/auth/signin'));
+const SignUpPage = lazy(() => import('@/pages/auth/signup'));
 const HomePage = lazy(() => import('@/pages/HomePage/index'));
+const LessonPage = lazy(() => import('@/pages/Lesson/index'));
+const CoursePage = lazy(() => import('@/pages/Course/index'));
+const CreateQuestionPage = lazy(() => import('@/pages/CreateQuestionPage'));
+const QuestionsPage = lazy(() => import('@/pages/QuestionsPage'));
 // ----------------------------------------------------------------------
 
 export default function AppRouter() {
@@ -26,6 +31,22 @@ export default function AppRouter() {
           path: '/',
           element: <HomePage />,
           index: true
+        },
+        {
+          path: '/lesson',
+          element: <LessonPage />
+        },
+        {
+          path: '/course',
+          element: <CoursePage />
+        },
+        {
+          path: '/questions',
+          element: <QuestionsPage />
+        },
+        {
+          path: '/questions/create',
+          element: <CreateQuestionPage />
         }
       ]
     }
@@ -33,19 +54,21 @@ export default function AppRouter() {
 
   const publicRoutes = [
     {
-      path: '/login',
-      element: <SignInPage />,
-      index: true
+      path: '/signin',
+      element: <SignInPage />
     },
-
+    {
+      path: '/signup',
+      element: <SignUpPage />
+    },
     {
       path: '/404',
       element: <NotFound />
-    },
-    {
-      path: '*',
-      element: <Navigate to="/404" replace />
     }
+    // {
+    //   path: '*',
+    //   element: <Navigate to="/404" replace />
+    // }
   ];
 
   const routes = useRoutes([...dashboardRoutes, ...publicRoutes]);
