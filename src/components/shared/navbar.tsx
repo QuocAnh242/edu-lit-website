@@ -77,7 +77,7 @@ const Navbar = () => {
           </NavLink>
 
           <NavLink
-            to="/lesson"
+            to="/lessons"
             className={({ isActive }) =>
               `rounded-md px-3 py-2 text-xl font-medium text-gray-700 transition-colors duration-200 hover:text-cyan-600 ${
                 isActive
@@ -87,7 +87,7 @@ const Navbar = () => {
             }
             style={{ fontFamily: 'LatoBlack, sans-serif' }}
           >
-            Lesson
+            Lessons
           </NavLink>
 
           <NavLink
@@ -192,11 +192,11 @@ const Navbar = () => {
               Home
             </Link>
             <Link
-              to="/lesson"
+              to="/lessons"
               className="block rounded-md px-3 py-2 text-lg font-medium text-gray-700 hover:text-cyan-600"
               style={{ fontFamily: 'LatoBlack, sans-serif' }}
             >
-              Lesson
+              Lessons
             </Link>
             <Link
               to="/course"
