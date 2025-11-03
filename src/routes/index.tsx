@@ -10,22 +10,24 @@ const DashboardLayout = lazy(
 const SignInPage = lazy(() => import('@/pages/auth/signin'));
 const SignUpPage = lazy(() => import('@/pages/auth/signup'));
 const HomePage = lazy(() => import('@/pages/HomePage/index'));
-const LessonPage = lazy(() => import('@/pages/LessonPage/index'));
+const LessonPage = lazy(() => import('@/pages/SyllabusPage/index'));
 const CoursePage = lazy(() => import('@/pages/Course/index'));
 const CreateQuestionPage = lazy(() => import('@/pages/CreateQuestionPage'));
 const QuestionsPage = lazy(() => import('@/pages/QuestionsPage'));
 const CreateLessonPage = lazy(
-  () => import('@/pages/LessonPage/CreateLessonPage')
+  () => import('@/pages/SyllabusPage/CreateLessonPage')
 );
-const EditLessonPage = lazy(() => import('@/pages/LessonPage/EditLessonPage'));
+const EditLessonPage = lazy(
+  () => import('@/pages/SyllabusPage/EditLessonPage')
+);
 const CreateSessionPage = lazy(
-  () => import('@/pages/LessonPage/CreateSessionPage')
+  () => import('@/pages/SyllabusPage/CreateSessionPage')
 );
 const EditSessionPage = lazy(
-  () => import('@/pages/LessonPage/EditSessionPage')
+  () => import('@/pages/SyllabusPage/EditSessionPage')
 );
 const ViewSessionPage = lazy(
-  () => import('@/pages/LessonPage/ViewSessionPage')
+  () => import('@/pages/SyllabusPage/ViewSessionPage')
 );
 // ----------------------------------------------------------------------
 
@@ -51,7 +53,7 @@ export default function AppRouter() {
           index: true
         },
         {
-          path: '/lessons',
+          path: '/syllabus',
           element: (
             <Suspense fallback={<div>Loading...</div>}>
               <LessonPage />
@@ -83,7 +85,7 @@ export default function AppRouter() {
           )
         },
         {
-          path: '/lessons/create',
+          path: '/courses/create',
           element: (
             <Suspense fallback={<div>Loading...</div>}>
               <CreateLessonPage />
@@ -91,7 +93,7 @@ export default function AppRouter() {
           )
         },
         {
-          path: '/lessons/:lessonId/edit',
+          path: '/courses/:lessonId/edit',
           element: (
             <Suspense fallback={<div>Loading...</div>}>
               <EditLessonPage />
@@ -99,7 +101,7 @@ export default function AppRouter() {
           )
         },
         {
-          path: '/lessons/:lessonId/create-session',
+          path: '/courses/:lessonId/create-session',
           element: (
             <Suspense fallback={<div>Loading...</div>}>
               <CreateSessionPage />
@@ -107,7 +109,7 @@ export default function AppRouter() {
           )
         },
         {
-          path: '/lessons/:lessonId/sessions/:sessionId/edit',
+          path: '/courses/:lessonId/sessions/:sessionId/edit',
           element: (
             <Suspense fallback={<div>Loading...</div>}>
               <EditSessionPage />
@@ -115,7 +117,7 @@ export default function AppRouter() {
           )
         },
         {
-          path: '/lessons/:lessonId/sessions/:sessionId',
+          path: '/courses/:lessonId/sessions/:sessionId',
           element: (
             <Suspense fallback={<div>Loading...</div>}>
               <ViewSessionPage />

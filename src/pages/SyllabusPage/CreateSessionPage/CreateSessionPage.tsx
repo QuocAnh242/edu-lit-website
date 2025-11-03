@@ -297,8 +297,8 @@ export default function CreateSessionPage() {
         className: 'bg-green-50 border-green-200'
       });
 
-      // Navigate back to lessons list
-      navigate('/lessons');
+      // Navigate back to syllabus list
+      navigate('/syllabus');
     } catch (error) {
       console.error('Error creating session:', error);
       toast({
@@ -318,11 +318,11 @@ export default function CreateSessionPage() {
         {/* Back Button */}
         <Button
           variant="ghost"
-          onClick={() => navigate('/lessons')}
+          onClick={() => navigate('/syllabus')}
           className="mb-6 gap-2"
         >
           <ArrowLeft className="h-4 w-4" />
-          Back to Lessons
+          Back to Syllabus
         </Button>
 
         {/* Page Header */}
@@ -748,7 +748,7 @@ Example: I/ Overview of Vietnamese Literature from August Revolution 1945-1975:
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => navigate('/lessons')}
+                  onClick={() => navigate('/syllabus')}
                   className="flex-1"
                   disabled={isSubmitting}
                 >

@@ -36,7 +36,7 @@ export default function ViewSessionPage() {
           description: 'Không thể tải dữ liệu session',
           variant: 'destructive'
         });
-        navigate('/lessons');
+        navigate('/syllabus');
       } finally {
         setIsLoading(false);
       }
@@ -83,7 +83,7 @@ export default function ViewSessionPage() {
         <main className="mx-auto max-w-5xl px-6 py-12">
           <Button
             variant="ghost"
-            onClick={() => navigate('/lessons')}
+            onClick={() => navigate('/syllabus')}
             className="mb-8 gap-2 text-base"
           >
             <ArrowLeft className="h-5 w-5" />
@@ -264,7 +264,7 @@ export default function ViewSessionPage() {
           <div className="flex items-center justify-between">
             <Button
               variant="ghost"
-              onClick={() => navigate('/lessons')}
+              onClick={() => navigate('/syllabus')}
               className="h-12 gap-2 px-6 text-base"
             >
               <ArrowLeft className="h-5 w-5" />
