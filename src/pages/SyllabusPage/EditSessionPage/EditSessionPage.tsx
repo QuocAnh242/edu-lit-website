@@ -113,7 +113,7 @@ export default function EditSessionPage() {
           description: 'Failed to load session data',
           variant: 'destructive'
         });
-        navigate('/lessons');
+        navigate('/syllabus');
       } finally {
         setIsLoading(false);
       }
@@ -341,7 +341,7 @@ export default function EditSessionPage() {
         className: 'bg-green-50 border-green-200'
       });
 
-      navigate('/lessons');
+      navigate('/syllabus');
     } catch (error) {
       console.error('Error updating session:', error);
       toast({
@@ -383,11 +383,11 @@ export default function EditSessionPage() {
         {/* Back Button */}
         <Button
           variant="ghost"
-          onClick={() => navigate('/lessons')}
+          onClick={() => navigate('/syllabus')}
           className="mb-6 gap-2"
         >
           <ArrowLeft className="h-4 w-4" />
-          Back to Lessons
+          Back to Syllabus
         </Button>
 
         {/* Page Header */}
@@ -730,7 +730,7 @@ export default function EditSessionPage() {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => navigate('/lessons')}
+                  onClick={() => navigate('/syllabus')}
                   className="flex-1"
                   disabled={isSubmitting}
                 >

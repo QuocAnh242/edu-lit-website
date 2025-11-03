@@ -38,175 +38,229 @@ export default function QuestionsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white">
-      <Navbar />
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="mb-8 flex items-center justify-between">
-          <div>
-            <h1
-              className="mb-2 text-4xl font-bold text-cyan-600"
-              style={{ fontFamily: 'LatoBlack, sans-serif' }}
+    <>
+      <style>{`
+        html {
+          overflow-y: scroll;
+          scrollbar-gutter: stable;
+        }
+        @keyframes fadeInUp {
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes slideIn {
+          from { opacity: 0; transform: translateX(-10px); }
+          to { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes scaleIn {
+          from { opacity: 0; transform: scale(0.95); }
+          to { opacity: 1; transform: scale(1); }
+        }
+        .animate-fade-in-up { animation: fadeInUp 0.5s ease-out forwards; }
+        .animate-slide-in { animation: slideIn 0.4s ease-out forwards; }
+        .animate-scale-in { animation: scaleIn 0.3s ease-out forwards; }
+      `}</style>
+      <div className="min-h-screen bg-white">
+        <Navbar />
+        <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+          {/* Header */}
+          <div className="animate-fade-in-up mb-8 flex items-center justify-between">
+            <div>
+              <h1
+                className="mb-2 flex items-center gap-2 text-4xl font-bold text-cyan-600"
+                style={{ fontFamily: 'LatoBlack, sans-serif' }}
+              >
+                <BookOpen className="h-10 w-10 transition-transform hover:scale-110" />
+                Questions Bank
+              </h1>
+              <p
+                className="text-lg text-gray-600"
+                style={{ fontFamily: 'LatoBlack, sans-serif' }}
+              >
+                Manage your questions collection
+              </p>
+            </div>
+            <Button
+              onClick={() => navigate('/questions/create')}
+              className="gap-2 bg-gradient-to-r from-cyan-600 to-blue-600 shadow-lg transition-all duration-300 hover:scale-105 hover:from-cyan-700 hover:to-blue-700 hover:shadow-xl"
             >
-              Questions Bank
-            </h1>
-            <p
-              className="text-lg text-gray-600"
-              style={{ fontFamily: 'LatoBlack, sans-serif' }}
-            >
-              Manage your questions collection
-            </p>
+              <Plus className="h-5 w-5" />
+              Create Question
+            </Button>
           </div>
-          <Button
-            onClick={() => navigate('/questions/create')}
-            className="gap-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700"
+
+          {/* Questions Table */}
+          <Card
+            className="animate-slide-in shadow-lg transition-all duration-300 hover:shadow-2xl"
+            style={{ animationDelay: '0.1s', opacity: 0 }}
           >
-            <Plus className="h-5 w-5" />
-            Create Question
-          </Button>
-        </div>
-
-        {/* Questions Table */}
-        <Card className="shadow-lg">
-          <CardHeader className="bg-gradient-to-r from-cyan-600 to-blue-600 text-white">
-            <CardTitle className="flex items-center gap-2">
-              <BookOpen className="h-5 w-5" />
-              All Questions
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            {isLoading ? (
-              <div className="space-y-4 p-6">
-                {[1, 2, 3, 4, 5].map((i) => (
-                  <div key={i} className="flex items-center gap-4">
-                    <Skeleton className="h-12 w-full" />
-                  </div>
-                ))}
-              </div>
-            ) : questions.length === 0 ? (
-              <div className="flex flex-col items-center justify-center p-12 text-center">
-                <BookOpen className="mb-4 h-16 w-16 text-gray-300" />
-                <h3 className="mb-2 text-xl font-semibold text-gray-700">
-                  No questions yet
-                </h3>
-                <p className="mb-4 text-gray-500">
-                  Get started by creating your first question
-                </p>
-                <Button
-                  onClick={() => navigate('/questions/create')}
-                  className="gap-2"
-                >
-                  <Plus className="h-4 w-4" />
-                  Create First Question
-                </Button>
-              </div>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[50%]">Title</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Created</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {questions.map((question: QuestionDto) => (
-                    <TableRow key={question.questionId}>
-                      <TableCell className="font-medium">
-                        <div>
-                          <div className="text-sm font-semibold">
-                            {question.title}
-                          </div>
-                          {question.tags && (
-                            <div className="mt-1 text-xs text-gray-500">
-                              Tags: {question.tags}
-                            </div>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {getQuestionTypeBadge(question.questionType)}
-                      </TableCell>
-                      <TableCell>
-                        {question.isPublished ? (
-                          <Badge
-                            variant="default"
-                            className="bg-green-600 hover:bg-green-700"
-                          >
-                            Published
-                          </Badge>
-                        ) : (
-                          <Badge variant="secondary">Draft</Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-sm text-gray-500">
-                        {new Date(question.createdAt).toLocaleDateString()}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button variant="ghost" size="icon">
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon">
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon">
-                            <Trash2 className="h-4 w-4 text-red-500" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
+            <CardHeader className="bg-gradient-to-r from-cyan-600 to-blue-600 text-white">
+              <CardTitle className="flex items-center gap-2">
+                <BookOpen className="h-5 w-5 transition-transform hover:scale-110" />
+                All Questions
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              {isLoading ? (
+                <div className="space-y-4 p-6">
+                  {[1, 2, 3, 4, 5].map((i) => (
+                    <div key={i} className="flex items-center gap-4">
+                      <Skeleton className="h-12 w-full" />
+                    </div>
                   ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
+                </div>
+              ) : questions.length === 0 ? (
+                <div className="flex flex-col items-center justify-center p-12 text-center">
+                  <BookOpen className="mb-4 h-16 w-16 text-gray-300" />
+                  <h3 className="mb-2 text-xl font-semibold text-gray-700">
+                    No questions yet
+                  </h3>
+                  <p className="mb-4 text-gray-500">
+                    Get started by creating your first question
+                  </p>
+                  <Button
+                    onClick={() => navigate('/questions/create')}
+                    className="gap-2"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Create First Question
+                  </Button>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[50%]">Title</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Created</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {questions.map((question: QuestionDto) => (
+                      <TableRow
+                        key={question.questionId}
+                        className="transition-colors duration-200 hover:bg-cyan-50"
+                      >
+                        <TableCell className="font-medium">
+                          <div>
+                            <div className="text-sm font-semibold">
+                              {question.title}
+                            </div>
+                            {question.tags && (
+                              <div className="mt-1 text-xs text-gray-500">
+                                Tags: {question.tags}
+                              </div>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {getQuestionTypeBadge(question.questionType)}
+                        </TableCell>
+                        <TableCell>
+                          {question.isPublished ? (
+                            <Badge
+                              variant="default"
+                              className="bg-green-600 hover:bg-green-700"
+                            >
+                              Published
+                            </Badge>
+                          ) : (
+                            <Badge variant="secondary">Draft</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-sm text-gray-500">
+                          {new Date(question.createdAt).toLocaleDateString()}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="transition-all duration-200 hover:scale-110 hover:bg-blue-50"
+                            >
+                              <Eye className="h-4 w-4 text-blue-600" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="transition-all duration-200 hover:scale-110 hover:bg-green-50"
+                            >
+                              <Edit className="h-4 w-4 text-green-600" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="transition-all duration-200 hover:scale-110 hover:bg-red-50"
+                            >
+                              <Trash2 className="h-4 w-4 text-red-500" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
 
-        {/* Stats Cards */}
-        {!isLoading && questions.length > 0 && (
-          <div className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-3">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm font-medium text-gray-600">
-                  Total Questions
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold text-cyan-600">
-                  {questions.length}
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm font-medium text-gray-600">
-                  Published
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold text-green-600">
-                  {questions.filter((q: QuestionDto) => q.isPublished).length}
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm font-medium text-gray-600">
-                  Drafts
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold text-orange-600">
-                  {questions.filter((q: QuestionDto) => !q.isPublished).length}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
-      </main>
-    </div>
+          {/* Stats Cards */}
+          {!isLoading && questions.length > 0 && (
+            <div className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-3">
+              <Card
+                className="animate-scale-in border-cyan-200 bg-gradient-to-br from-cyan-50 to-cyan-100 transition-all duration-300 hover:scale-105 hover:shadow-lg"
+                style={{ animationDelay: '0.2s', opacity: 0 }}
+              >
+                <CardHeader>
+                  <CardTitle className="text-sm font-medium text-cyan-700">
+                    Total Questions
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold text-cyan-600">
+                    {questions.length}
+                  </div>
+                </CardContent>
+              </Card>
+              <Card
+                className="animate-scale-in border-green-200 bg-gradient-to-br from-green-50 to-green-100 transition-all duration-300 hover:scale-105 hover:shadow-lg"
+                style={{ animationDelay: '0.3s', opacity: 0 }}
+              >
+                <CardHeader>
+                  <CardTitle className="text-sm font-medium text-green-700">
+                    Published
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold text-green-600">
+                    {questions.filter((q: QuestionDto) => q.isPublished).length}
+                  </div>
+                </CardContent>
+              </Card>
+              <Card
+                className="animate-scale-in border-orange-200 bg-gradient-to-br from-orange-50 to-orange-100 transition-all duration-300 hover:scale-105 hover:shadow-lg"
+                style={{ animationDelay: '0.4s', opacity: 0 }}
+              >
+                <CardHeader>
+                  <CardTitle className="text-sm font-medium text-orange-700">
+                    Drafts
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold text-orange-600">
+                    {
+                      questions.filter((q: QuestionDto) => !q.isPublished)
+                        .length
+                    }
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+        </main>
+      </div>
+    </>
   );
 }

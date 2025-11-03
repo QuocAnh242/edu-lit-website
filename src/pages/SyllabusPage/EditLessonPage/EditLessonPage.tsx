@@ -41,7 +41,7 @@ export default function EditLessonPage() {
         const lesson = getLessonById(lessonId || '');
 
         if (!lesson) {
-          throw new Error('Lesson not found');
+          throw new Error('Course not found');
         }
 
         // Extract grade number from "Lớp X" format
@@ -56,13 +56,13 @@ export default function EditLessonPage() {
         setGrade(gradeNum);
         setSemester(semesterNum);
       } catch (error) {
-        console.error('Error loading lesson:', error);
+        console.error('Error loading course:', error);
         toast({
           title: 'Error',
-          description: 'Failed to load lesson data',
+          description: 'Failed to load course data',
           variant: 'destructive'
         });
-        navigate('/lessons');
+        navigate('/syllabus');
       } finally {
         setIsLoading(false);
       }
@@ -78,7 +78,7 @@ export default function EditLessonPage() {
     if (!title.trim()) {
       toast({
         title: 'Error',
-        description: 'Lesson title is required',
+        description: 'Course title is required',
         variant: 'destructive'
       });
       return;
@@ -105,16 +105,16 @@ export default function EditLessonPage() {
     setIsSubmitting(true);
 
     try {
-      // Get current lesson from localStorage
-      const currentLesson = getLessonById(lessonId || '');
+      // Get current course from localStorage
+      const currentCourse = getLessonById(lessonId || '');
 
-      if (!currentLesson) {
-        throw new Error('Lesson not found');
+      if (!currentCourse) {
+        throw new Error('Course not found');
       }
 
-      // Update lesson with new data (preserve sessions)
-      const updatedLesson = {
-        ...currentLesson,
+      // Update course with new data (preserve sessions)
+      const updatedCourse = {
+        ...currentCourse,
         title: title.trim(),
         description: description.trim(),
         grade: `Lớp ${grade}`,
@@ -123,24 +123,24 @@ export default function EditLessonPage() {
       };
 
       // Save to localStorage
-      updateLesson(lessonId || '', updatedLesson);
+      updateLesson(lessonId || '', updatedCourse);
 
       // Mock delay for better UX
       await new Promise((resolve) => setTimeout(resolve, 500));
 
       toast({
         title: 'Success',
-        description: 'Lesson updated successfully!',
+        description: 'Course updated successfully!',
         className: 'bg-green-50 border-green-200'
       });
 
-      // Navigate back to lessons list
-      navigate('/lessons');
+      // Navigate back to syllabus list
+      navigate('/syllabus');
     } catch (error) {
-      console.error('Error updating lesson:', error);
+      console.error('Error updating course:', error);
       toast({
         title: 'Error',
-        description: 'Failed to update lesson. Please try again.',
+        description: 'Failed to update course. Please try again.',
         variant: 'destructive'
       });
     } finally {
@@ -155,11 +155,11 @@ export default function EditLessonPage() {
         <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
           <Button
             variant="ghost"
-            onClick={() => navigate('/lessons')}
+            onClick={() => navigate('/syllabus')}
             className="mb-6 gap-2"
           >
             <ArrowLeft className="h-4 w-4" />
-            Back to Lessons
+            Back to Syllabus
           </Button>
 
           <div className="mb-8">
@@ -192,21 +192,21 @@ export default function EditLessonPage() {
         {/* Back Button */}
         <Button
           variant="ghost"
-          onClick={() => navigate('/lessons')}
+          onClick={() => navigate('/syllabus')}
           className="mb-6 gap-2"
         >
           <ArrowLeft className="h-4 w-4" />
-          Back to Lessons
+          Back to Syllabus
         </Button>
 
         {/* Page Header */}
         <div className="mb-8">
           <h1 className="mb-2 flex items-center gap-3 text-4xl font-bold text-green-600">
             <BookOpen className="h-10 w-10" />
-            Edit Lesson
+            Edit Course
           </h1>
           <p className="text-lg text-gray-600">
-            Update lesson information for your literature curriculum
+            Update course information for your literature curriculum
           </p>
         </div>
 
@@ -214,13 +214,13 @@ export default function EditLessonPage() {
         <form onSubmit={handleSubmit}>
           <Card className="shadow-lg">
             <CardHeader className="bg-gradient-to-r from-green-600 to-teal-600 text-white">
-              <CardTitle className="text-2xl">Lesson Information</CardTitle>
+              <CardTitle className="text-2xl">Course Information</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6 pt-6">
-              {/* Lesson Title */}
+              {/* Course Title */}
               <div className="space-y-2">
                 <Label htmlFor="title" className="text-base font-semibold">
-                  Lesson Title *
+                  Course Title *
                 </Label>
                 <Input
                   id="title"
@@ -231,7 +231,7 @@ export default function EditLessonPage() {
                   required
                 />
                 <p className="text-sm text-slate-500">
-                  Enter a clear, descriptive title for the lesson
+                  Enter a clear, descriptive title for the course
                 </p>
               </div>
 
@@ -245,14 +245,14 @@ export default function EditLessonPage() {
                 </Label>
                 <Textarea
                   id="description"
-                  placeholder="Provide a brief overview of what this lesson covers..."
+                  placeholder="Provide a brief overview of what this course covers..."
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   rows={5}
                   className="text-base"
                 />
                 <p className="text-sm text-slate-500">
-                  Optional: Add details about the lesson scope and objectives
+                  Optional: Add details about the course scope and objectives
                 </p>
               </div>
 
@@ -295,7 +295,7 @@ export default function EditLessonPage() {
               {/* Warning Banner */}
               <div className="rounded-lg border border-orange-200 bg-orange-50 p-4">
                 <p className="text-sm text-orange-700">
-                  ⚠️ <strong>Warning:</strong> Updating this lesson will affect
+                  ⚠️ <strong>Warning:</strong> Updating this course will affect
                   all associated sessions and lesson plans. Make sure you review
                   the changes carefully.
                 </p>
@@ -306,7 +306,7 @@ export default function EditLessonPage() {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => navigate('/lessons')}
+                  onClick={() => navigate('/syllabus')}
                   className="flex-1"
                   disabled={isSubmitting}
                 >
@@ -325,7 +325,7 @@ export default function EditLessonPage() {
                   ) : (
                     <>
                       <Save className="h-4 w-4" />
-                      Update Lesson
+                      Update Course
                     </>
                   )}
                 </Button>
@@ -335,53 +335,53 @@ export default function EditLessonPage() {
         </form>
 
         {/* Preview Card */}
-        {title && (
-          <Card className="mt-8 shadow-lg">
-            <CardHeader className="bg-slate-100">
-              <CardTitle className="text-lg text-slate-700">Preview</CardTitle>
-            </CardHeader>
-            <CardContent className="pt-6">
-              <div className="space-y-3">
+        <Card className="mt-8 shadow-lg">
+          <CardHeader className="bg-slate-100">
+            <CardTitle className="text-lg text-slate-700">Preview</CardTitle>
+          </CardHeader>
+          <CardContent className="pt-6">
+            <div className="space-y-3">
+              <div>
+                <span className="text-sm font-semibold text-slate-500">
+                  Title:
+                </span>
+                <p className="text-lg font-semibold text-slate-800">
+                  {title || (
+                    <span className="italic text-slate-400">Not set yet</span>
+                  )}
+                </p>
+              </div>
+              {description && (
                 <div>
                   <span className="text-sm font-semibold text-slate-500">
-                    Title:
+                    Description:
                   </span>
-                  <p className="text-lg font-semibold text-slate-800">
-                    {title}
-                  </p>
+                  <p className="text-slate-700">{description}</p>
                 </div>
-                {description && (
+              )}
+              <div className="flex gap-4">
+                {grade && (
                   <div>
                     <span className="text-sm font-semibold text-slate-500">
-                      Description:
+                      Grade:
                     </span>
-                    <p className="text-slate-700">{description}</p>
+                    <p className="text-slate-700">Lớp {grade}</p>
                   </div>
                 )}
-                <div className="flex gap-4">
-                  {grade && (
-                    <div>
-                      <span className="text-sm font-semibold text-slate-500">
-                        Grade:
-                      </span>
-                      <p className="text-slate-700">Lớp {grade}</p>
-                    </div>
-                  )}
-                  {semester && (
-                    <div>
-                      <span className="text-sm font-semibold text-slate-500">
-                        Semester:
-                      </span>
-                      <p className="text-slate-700">
-                        Học kỳ {semester === '1' ? 'I' : 'II'}
-                      </p>
-                    </div>
-                  )}
-                </div>
+                {semester && (
+                  <div>
+                    <span className="text-sm font-semibold text-slate-500">
+                      Semester:
+                    </span>
+                    <p className="text-slate-700">
+                      Học kỳ {semester === '1' ? 'I' : 'II'}
+                    </p>
+                  </div>
+                )}
               </div>
-            </CardContent>
-          </Card>
-        )}
+            </div>
+          </CardContent>
+        </Card>
       </main>
     </div>
   );
