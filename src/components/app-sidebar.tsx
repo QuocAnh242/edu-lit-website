@@ -1,4 +1,12 @@
-import { Calendar, Home, Inbox, Search, Settings,LogIn,Shirt,MonitorSmartphone,CircleUser } from "lucide-react"
+import {
+  Home,
+  Settings,
+  LogIn,
+  CircleUser,
+  HelpCircle,
+  BookOpen,
+  GraduationCap
+} from 'lucide-react';
 import {
   Sidebar,
   SidebarContent,
@@ -7,49 +15,53 @@ import {
   SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuButton,
-  SidebarMenuItem,
-} from "@/components/ui/sidebar"
+  SidebarMenuItem
+} from '@/components/ui/sidebar';
 // Menu items.
 const items = [
   {
-    title: "Devices",
-    url: "#",
-    icon: MonitorSmartphone,
-  },
- 
-  {
-    title: "Shirt",
-    url: "#",
-    icon: Shirt,
-  },
-   {
-    title: "MyAccount",
-    url: "#",
-    icon: CircleUser,
-  },
- {
-    title: "Inbox",
-    url: "#",
-    icon: Inbox,
+    title: 'Home',
+    url: '/',
+    icon: Home
   },
   {
-    title: "Settings",
-    url: "#",
-    icon: Settings,
+    title: 'Courses',
+    url: '/course',
+    icon: GraduationCap
   },
   {
-    title: "login",
-    url: "#",
-    icon: LogIn,
+    title: 'Lessons',
+    url: '/lessons',
+    icon: BookOpen
   },
-]
+  {
+    title: 'Questions',
+    url: '/questions',
+    icon: HelpCircle
+  },
+  {
+    title: 'My Account',
+    url: '#',
+    icon: CircleUser
+  },
+  {
+    title: 'Settings',
+    url: '#',
+    icon: Settings
+  },
+  {
+    title: 'Sign In',
+    url: '/signin',
+    icon: LogIn
+  }
+];
 export function AppSidebar() {
   return (
     <Sidebar>
       <SidebarContent>
-         <div className="font-bold text-lg bg-[#232f3e] text-white px-4 py-3 rounded">
-           👤 Hello, sign in
-         </div>
+        <div className="rounded bg-[#232f3e] px-4 py-3 text-lg font-bold text-white">
+          👤 Hello, sign in
+        </div>
         <SidebarGroup>
           <SidebarGroupLabel></SidebarGroupLabel>
           <SidebarGroupContent>
@@ -69,9 +81,8 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
     </Sidebar>
-  )
+  );
 }
-
 
 // import { ChevronRight } from "lucide-react"
 // import {
@@ -99,7 +110,7 @@ export function AppSidebar() {
 // ]
 
 // export function AppSidebar() {
-  
+
 //   return (
 //     <Sidebar className="w-72 bg-white text-black overflow-y-auto">
 //       <SidebarContent className="p-4 space-y-6">
