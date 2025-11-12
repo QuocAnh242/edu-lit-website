@@ -4,7 +4,11 @@ import {
   LogIn,
   Shirt,
   MonitorSmartphone,
-  CircleUser
+  CircleUser,
+  Home,
+  HelpCircle,
+  BookOpen,
+  GraduationCap
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import {
@@ -41,6 +45,31 @@ const items = [
     icon: Inbox
   },
   {
+    title: 'Home',
+    url: '/',
+    icon: Home
+  },
+  {
+    title: 'Courses',
+    url: '/course',
+    icon: GraduationCap
+  },
+  {
+    title: 'Lessons',
+    url: '/lessons',
+    icon: BookOpen
+  },
+  {
+    title: 'Questions',
+    url: '/questions',
+    icon: HelpCircle
+  },
+  {
+    title: 'My Account',
+    url: '#',
+    icon: CircleUser
+  },
+  {
     title: 'Settings',
     url: '#',
     icon: Settings
@@ -48,6 +77,11 @@ const items = [
   {
     title: 'login',
     url: '#',
+    icon: LogIn
+  },
+  {
+    title: 'Sign In',
+    url: '/signin',
     icon: LogIn
   }
 ];
