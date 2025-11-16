@@ -15,7 +15,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Plus, Trash2, Save, ArrowLeft, CheckCircle } from 'lucide-react';
+import {
+  Plus,
+  Trash2,
+  Save,
+  ArrowLeft,
+  CheckCircle,
+  AlertCircle
+} from 'lucide-react';
 import {
   useCreateQuestion,
   useCreateQuestionOption,
@@ -45,6 +52,16 @@ export default function CreateQuestionPage() {
   const [selectedQuestionBankId, setSelectedQuestionBankId] = useState('');
   const [options, setOptions] = useState<QuestionOption[]>([]);
   const [sampleAnswer, setSampleAnswer] = useState(''); // For Paragraph type
+
+  // Error state for field validation
+  const [errors, setErrors] = useState<{
+    title?: string;
+    body?: string;
+    questionBank?: string;
+    options?: string;
+    optionText?: { [key: string]: string };
+    correctAnswer?: string;
+  }>({});
 
   // Get question banks
   const { data: questionBanksData, isLoading: loadingBanks } =
@@ -83,46 +100,123 @@ export default function CreateQuestionPage() {
     setOptions(
       options.map((opt) => (opt.id === id ? { ...opt, optionText: text } : opt))
     );
+    // Clear option text error when user starts typing
+    if (errors.optionText?.[id]) {
+      setErrors((prev) => {
+        const newOptionText = { ...prev.optionText };
+        delete newOptionText[id];
+        return { ...prev, optionText: newOptionText };
+      });
+    }
+    // Clear correct answer error if at least one option is correct
+    if (errors.correctAnswer) {
+      const updatedOptions = options.map((opt) =>
+        opt.id === id ? { ...opt, optionText: text } : opt
+      );
+      if (updatedOptions.some((opt) => opt.isCorrect)) {
+        setErrors((prev) => {
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const { correctAnswer, ...rest } = prev;
+          return rest;
+        });
+      }
+    }
   };
 
   // Toggle correct answer
   const toggleCorrect = (id: string) => {
-    setOptions(
-      options.map((opt) =>
-        opt.id === id ? { ...opt, isCorrect: !opt.isCorrect } : opt
-      )
+    const updatedOptions = options.map((opt) =>
+      opt.id === id ? { ...opt, isCorrect: !opt.isCorrect } : opt
     );
+    setOptions(updatedOptions);
+    // Clear correct answer error when user marks an option as correct
+    if (errors.correctAnswer && updatedOptions.some((opt) => opt.isCorrect)) {
+      setErrors((prev) => {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { correctAnswer, ...rest } = prev;
+        return rest;
+      });
+    }
+  };
+
+  // Clear error for a specific field
+  const clearError = (
+    field: 'title' | 'body' | 'questionBank' | 'options' | 'correctAnswer'
+  ) => {
+    setErrors((prev) => {
+      const newErrors = { ...prev };
+      delete newErrors[field];
+      return newErrors;
+    });
   };
 
   // Validate form
   const validateForm = (): boolean => {
+    const newErrors: typeof errors = {};
+    let isValid = true;
+
+    // Validate title
     if (!title.trim()) {
-      toast.error('Please enter a question title');
-      return false;
+      newErrors.title = 'Question title is required';
+      isValid = false;
     }
+
+    // Validate body
     if (!body.trim()) {
-      toast.error('Please enter question body/content');
-      return false;
+      newErrors.body = 'Question content is required';
+      isValid = false;
     }
+
+    // Validate question bank
     if (!selectedQuestionBankId) {
-      toast.error('Please select a question bank');
-      return false;
+      newErrors.questionBank = 'Please select a question bank';
+      isValid = false;
     }
+
+    // Validate options for Multiple Choice
     if (questionType === QuestionType.Multichoice) {
       if (options.length < 2) {
-        toast.error('Multiple choice questions need at least 2 options');
-        return false;
-      }
-      if (options.some((opt) => !opt.optionText.trim())) {
-        toast.error('All options must have text');
-        return false;
-      }
-      if (!options.some((opt) => opt.isCorrect)) {
-        toast.error('Please mark at least one correct answer');
-        return false;
+        newErrors.options = 'Multiple choice questions need at least 2 options';
+        isValid = false;
+      } else {
+        // Validate option text
+        const optionTextErrors: { [key: string]: string } = {};
+        options.forEach((opt) => {
+          if (!opt.optionText.trim()) {
+            optionTextErrors[opt.id] = 'Option text is required';
+            isValid = false;
+          }
+        });
+        if (Object.keys(optionTextErrors).length > 0) {
+          newErrors.optionText = optionTextErrors;
+        }
+
+        // Validate correct answer
+        if (!options.some((opt) => opt.isCorrect)) {
+          newErrors.correctAnswer = 'Please mark at least one correct answer';
+          isValid = false;
+        }
       }
     }
-    return true;
+
+    // Set errors
+    setErrors(newErrors);
+
+    // Show toast for first error
+    if (!isValid) {
+      const firstError = Object.values(newErrors)[0];
+      if (typeof firstError === 'string') {
+        toast.error('Please fix the errors in the form', {
+          description: firstError
+        });
+      } else if (newErrors.options) {
+        toast.error(newErrors.options);
+      } else if (newErrors.correctAnswer) {
+        toast.error(newErrors.correctAnswer);
+      }
+    }
+
+    return isValid;
   };
 
   // Submit form
@@ -199,6 +293,7 @@ export default function CreateQuestionPage() {
       setOptions([]);
       setSampleAnswer('');
       setSelectedQuestionBankId('');
+      setErrors({});
 
       // Navigate back or to questions list
       setTimeout(() => {
@@ -277,10 +372,20 @@ export default function CreateQuestionPage() {
                 <Label htmlFor="questionBank">Question Bank *</Label>
                 <Select
                   value={selectedQuestionBankId}
-                  onValueChange={setSelectedQuestionBankId}
+                  onValueChange={(value) => {
+                    setSelectedQuestionBankId(value);
+                    clearError('questionBank');
+                  }}
                   disabled={loadingBanks}
                 >
-                  <SelectTrigger id="questionBank">
+                  <SelectTrigger
+                    id="questionBank"
+                    className={
+                      errors.questionBank
+                        ? 'border-red-500 focus:border-red-500'
+                        : ''
+                    }
+                  >
                     <SelectValue
                       placeholder={
                         loadingBanks
@@ -308,6 +413,12 @@ export default function CreateQuestionPage() {
                       )}
                   </SelectContent>
                 </Select>
+                {errors.questionBank && (
+                  <div className="flex items-center gap-1 text-sm text-red-600">
+                    <AlertCircle className="h-4 w-4" />
+                    <span>{errors.questionBank}</span>
+                  </div>
+                )}
               </div>
 
               {/* Title */}
@@ -317,9 +428,22 @@ export default function CreateQuestionPage() {
                   id="title"
                   placeholder="Enter a clear and concise question title"
                   value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  className="border-slate-300"
+                  onChange={(e) => {
+                    setTitle(e.target.value);
+                    clearError('title');
+                  }}
+                  className={
+                    errors.title
+                      ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
+                      : 'border-slate-300'
+                  }
                 />
+                {errors.title && (
+                  <div className="flex items-center gap-1 text-sm text-red-600">
+                    <AlertCircle className="h-4 w-4" />
+                    <span>{errors.title}</span>
+                  </div>
+                )}
               </div>
 
               {/* Body */}
@@ -329,10 +453,23 @@ export default function CreateQuestionPage() {
                   id="body"
                   placeholder="Enter the full question content or description"
                   value={body}
-                  onChange={(e) => setBody(e.target.value)}
+                  onChange={(e) => {
+                    setBody(e.target.value);
+                    clearError('body');
+                  }}
                   rows={6}
-                  className="border-slate-300"
+                  className={
+                    errors.body
+                      ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
+                      : 'border-slate-300'
+                  }
                 />
+                {errors.body && (
+                  <div className="flex items-center gap-1 text-sm text-red-600">
+                    <AlertCircle className="h-4 w-4" />
+                    <span>{errors.body}</span>
+                  </div>
+                )}
               </div>
 
               {/* Sample Answer for Paragraph Type */}
@@ -407,7 +544,7 @@ export default function CreateQuestionPage() {
               <CardHeader className="bg-gradient-to-r from-purple-600 to-pink-600 text-white">
                 <div className="flex items-center justify-between">
                   <div>
-                    <CardTitle>Answer Options</CardTitle>
+                    <CardTitle>Answer Options *</CardTitle>
                     <p className="mt-1 text-sm text-white/80">
                       {options.length}/10 options added
                     </p>
@@ -426,6 +563,19 @@ export default function CreateQuestionPage() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-3 pt-6">
+                {/* Options error message */}
+                {errors.options && (
+                  <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-600">
+                    <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                    <span>{errors.options}</span>
+                  </div>
+                )}
+                {errors.correctAnswer && (
+                  <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-600">
+                    <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                    <span>{errors.correctAnswer}</span>
+                  </div>
+                )}
                 {options.length === 0 ? (
                   <div className="rounded-lg border-2 border-dashed border-slate-300 p-8 text-center">
                     <p className="text-slate-500">
@@ -442,44 +592,61 @@ export default function CreateQuestionPage() {
                       </div>
                     )}
                     {options.map((option, index) => (
-                      <div
-                        key={option.id}
-                        className="flex items-center gap-3 rounded-lg border border-slate-200 p-4 transition-all hover:border-slate-300 hover:shadow-md"
-                      >
-                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-sm font-medium text-slate-700">
-                          {index + 1}
-                        </div>
-                        <Input
-                          placeholder={`Option ${index + 1}`}
-                          value={option.optionText}
-                          onChange={(e) =>
-                            updateOptionText(option.id, e.target.value)
-                          }
-                          className="flex-1"
-                        />
-                        <div className="flex items-center gap-2">
-                          <Button
-                            type="button"
-                            variant={option.isCorrect ? 'default' : 'outline'}
-                            size="sm"
-                            onClick={() => toggleCorrect(option.id)}
-                            className={
-                              option.isCorrect
-                                ? 'bg-green-600 hover:bg-green-700'
-                                : ''
-                            }
-                          >
-                            <CheckCircle className="mr-1 h-4 w-4" />
-                            {option.isCorrect ? 'Correct' : 'Mark Correct'}
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="destructive"
-                            size="icon"
-                            onClick={() => removeOption(option.id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                      <div key={option.id} className="space-y-2">
+                        <div
+                          className={`flex items-center gap-3 rounded-lg border p-4 transition-all ${
+                            errors.optionText?.[option.id]
+                              ? 'border-red-300 bg-red-50'
+                              : 'border-slate-200 bg-slate-50 hover:border-slate-300 hover:shadow-md'
+                          }`}
+                        >
+                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-sm font-medium text-slate-700">
+                            {index + 1}
+                          </div>
+                          <div className="flex-1">
+                            <Input
+                              placeholder={`Option ${index + 1}`}
+                              value={option.optionText}
+                              onChange={(e) =>
+                                updateOptionText(option.id, e.target.value)
+                              }
+                              className={
+                                errors.optionText?.[option.id]
+                                  ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
+                                  : ''
+                              }
+                            />
+                            {errors.optionText?.[option.id] && (
+                              <div className="mt-1 flex items-center gap-1 text-xs text-red-600">
+                                <AlertCircle className="h-3 w-3" />
+                                <span>{errors.optionText[option.id]}</span>
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              type="button"
+                              variant={option.isCorrect ? 'default' : 'outline'}
+                              size="sm"
+                              onClick={() => toggleCorrect(option.id)}
+                              className={
+                                option.isCorrect
+                                  ? 'bg-green-600 hover:bg-green-700'
+                                  : ''
+                              }
+                            >
+                              <CheckCircle className="mr-1 h-4 w-4" />
+                              {option.isCorrect ? 'Correct' : 'Mark Correct'}
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="destructive"
+                              size="icon"
+                              onClick={() => removeOption(option.id)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </div>
                       </div>
                     ))}

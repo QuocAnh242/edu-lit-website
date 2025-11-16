@@ -118,6 +118,20 @@ const Navbar = () => {
             Questions
           </NavLink>
 
+          <NavLink
+            to="/assessments"
+            className={({ isActive }) =>
+              `rounded-md px-3 py-2 text-xl font-medium text-gray-700 transition-colors duration-200 hover:text-cyan-600 ${
+                isActive
+                  ? 'text-cyan-700 underline decoration-cyan-600 decoration-2 underline-offset-8'
+                  : ''
+              }`
+            }
+            style={{ fontFamily: 'LatoBlack, sans-serif' }}
+          >
+            Assessments
+          </NavLink>
+
           {/* Right side - Auth Buttons or User Info */}
           <div className="flex items-center space-x-4">
             {isLoggedIn && user ? (
@@ -211,6 +225,13 @@ const Navbar = () => {
               style={{ fontFamily: 'LatoBlack, sans-serif' }}
             >
               Questions
+            </Link>
+            <Link
+              to="/assessments"
+              className="block rounded-md px-3 py-2 text-lg font-medium text-gray-700 hover:text-cyan-600"
+              style={{ fontFamily: 'LatoBlack, sans-serif' }}
+            >
+              Assessments
             </Link>
             <div className="border-t border-gray-200 pt-2">
               <Link

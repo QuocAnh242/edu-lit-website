@@ -1,12 +1,16 @@
 import {
-  Home,
+  Inbox,
   Settings,
   LogIn,
+  Shirt,
+  MonitorSmartphone,
   CircleUser,
+  Home,
   HelpCircle,
   BookOpen,
   GraduationCap
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import {
   Sidebar,
   SidebarContent,
@@ -19,6 +23,27 @@ import {
 } from '@/components/ui/sidebar';
 // Menu items.
 const items = [
+  {
+    title: 'Devices',
+    url: '#',
+    icon: MonitorSmartphone
+  },
+
+  {
+    title: 'Shirt',
+    url: '#',
+    icon: Shirt
+  },
+  {
+    title: 'MyAccount',
+    url: '/profile',
+    icon: CircleUser
+  },
+  {
+    title: 'Inbox',
+    url: '#',
+    icon: Inbox
+  },
   {
     title: 'Home',
     url: '/',
@@ -50,6 +75,11 @@ const items = [
     icon: Settings
   },
   {
+    title: 'login',
+    url: '#',
+    icon: LogIn
+  },
+  {
     title: 'Sign In',
     url: '/signin',
     icon: LogIn
@@ -69,10 +99,10 @@ export function AppSidebar() {
               {items.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild>
-                    <a href={item.url}>
+                    <Link to={item.url}>
                       <item.icon />
                       <span>{item.title}</span>
-                    </a>
+                    </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
