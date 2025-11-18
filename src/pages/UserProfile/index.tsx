@@ -5,6 +5,7 @@ import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 import { Loader2, Mail, Calendar } from 'lucide-react';
 
+import Navbar from '@/components/shared/navbar';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -16,7 +17,6 @@ import {
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -27,21 +27,16 @@ import { useToast } from '@/components/ui/use-toast';
 import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
-import { getUserById, updateUser } from '@/services/user.api';
+import { getProfile, updateProfile } from '@/services/auth.api';
 import { User } from '@/types/user.type';
 import helpers from '@/helpers';
 
-// Form validation schema
+// Form validation schema - only fullName can be updated
 const profileFormSchema = z.object({
-  username: z
-    .string()
-    .min(2, { message: 'Tên đăng nhập phải có ít nhất 2 ký tự' })
-    .max(50, { message: 'Tên đăng nhập không được vượt quá 50 ký tự' }),
-  email: z.string().email({ message: 'Email không hợp lệ' }),
   fullName: z
     .string()
-    .min(2, { message: 'Họ và tên phải có ít nhất 2 ký tự' })
-    .max(100, { message: 'Họ và tên không được vượt quá 100 ký tự' })
+    .min(2, { message: 'Full name must be at least 2 characters' })
+    .max(100, { message: 'Full name must not exceed 100 characters' })
 });
 
 type ProfileFormValues = z.infer<typeof profileFormSchema>;
@@ -56,8 +51,6 @@ export default function UserProfile() {
   const form = useForm<ProfileFormValues>({
     resolver: zodResolver(profileFormSchema),
     defaultValues: {
-      username: '',
-      email: '',
       fullName: ''
     }
   });
@@ -66,59 +59,40 @@ export default function UserProfile() {
   useEffect(() => {
     const fetchUserData = async () => {
       try {
-        // Try to get user ID from localStorage first (more reliable)
-        let userId = '';
-        const userStr = localStorage.getItem('user');
-        if (userStr) {
-          try {
-            const user = JSON.parse(userStr);
-            userId = user.id;
-          } catch (e) {
-            console.error('Error parsing user from localStorage:', e);
-          }
-        }
-
-        // Fallback to JWT token if localStorage doesn't have user
-        if (!userId) {
-          userId = helpers.getUserId();
-        }
-
-        // If still no userId, redirect to login
-        if (!userId) {
-          toast({
-            title: 'Lỗi xác thực',
-            description: 'Vui lòng đăng nhập lại',
-            variant: 'destructive'
-          });
-          navigate('/signin');
-          return;
-        }
-
-        const response = await getUserById(userId);
+        const response = await getProfile();
 
         if (response.success && response.data) {
           setUserData(response.data);
-          // Set form values
+          // Set form values - only fullName
           form.reset({
-            username: response.data.username,
-            email: response.data.email,
             fullName: response.data.fullName
           });
         } else {
           toast({
-            title: 'Lỗi',
-            description:
-              response.message || 'Không thể tải thông tin người dùng',
+            title: 'Error',
+            description: response.message || 'Unable to load user information',
             variant: 'destructive'
           });
         }
       } catch (error) {
         console.error('Error fetching user:', error);
+        const err = error as {
+          response?: {
+            data?: { message?: string };
+            status?: number;
+          };
+        };
+        const errorMessage =
+          err?.response?.data?.message || 'Unable to load user information';
         toast({
-          title: 'Lỗi',
-          description: 'Không thể tải thông tin người dùng',
+          title: 'Error',
+          description: errorMessage,
           variant: 'destructive'
         });
+        // If unauthorized, redirect to login
+        if (err?.response?.status === 401) {
+          navigate('/signin');
+        }
       } finally {
         setFetchingUser(false);
       }
@@ -129,60 +103,49 @@ export default function UserProfile() {
   }, [navigate, toast]);
 
   const onSubmit = async (data: ProfileFormValues) => {
-    if (!userData) return;
-
     setLoading(true);
     try {
-      const updateData = {
-        id: userData.id,
-        username: data.username,
-        email: data.email,
-        fullName: data.fullName,
-        roleId: userData.roleId,
-        roleName: userData.roleName,
-        token: userData.token,
-        createdAt: userData.createdAt
-      };
+      const response = await updateProfile({
+        fullName: data.fullName
+      });
 
-      const response = await updateUser(userData.id, updateData);
-
-      if (response.success) {
+      if (response.success && response.data) {
         toast({
-          title: 'Cập nhật thành công!',
-          description: 'Thông tin của bạn đã được cập nhật',
+          title: 'Success!',
+          description: 'Your profile has been updated',
           variant: 'default'
         });
 
-        // Refresh user data
-        const updatedUser = await getUserById(userData.id);
-        if (updatedUser.success && updatedUser.data) {
-          setUserData(updatedUser.data);
-        }
+        // Update user data with response
+        setUserData(response.data);
       } else {
         toast({
-          title: 'Cập nhật thất bại',
-          description: response.message || 'Không thể cập nhật thông tin',
+          title: 'Update Failed',
+          description: response.message || 'Unable to update profile',
           variant: 'destructive'
         });
       }
     } catch (error) {
       console.error('Update error:', error);
 
-      let errorMessage = 'Không thể cập nhật thông tin';
       const err = error as {
         response?: {
-          data?: { message?: string; errors?: Record<string, string[]> };
+          data?: {
+            message?: string;
+            errors?: Record<string, string[]>;
+          };
         };
       };
-      if (err.response?.data?.message) {
+      let errorMessage = 'Unable to update profile';
+      if (err?.response?.data?.message) {
         errorMessage = err.response.data.message;
-      } else if (err.response?.data?.errors) {
+      } else if (err?.response?.data?.errors) {
         const errors = err.response.data.errors;
         errorMessage = Object.values(errors).flat().join(', ');
       }
 
       toast({
-        title: 'Lỗi',
+        title: 'Error',
         description: errorMessage,
         variant: 'destructive'
       });
@@ -209,156 +172,180 @@ export default function UserProfile() {
   };
 
   return (
-    <div className="container mx-auto max-w-4xl p-6">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold tracking-tight">Hồ sơ cá nhân</h1>
-        <p className="text-muted-foreground">
-          Quản lý thông tin tài khoản của bạn
-        </p>
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-cyan-50 to-blue-50">
+      <Navbar />
+      <div className="container mx-auto max-w-4xl p-6">
+        <div className="mb-8">
+          <h1
+            className="mb-2 text-4xl font-bold tracking-tight text-cyan-600"
+            style={{ fontFamily: 'LatoBlack, sans-serif' }}
+          >
+            Profile
+          </h1>
+          <p
+            className="text-lg text-gray-600"
+            style={{ fontFamily: 'LatoBlack, sans-serif' }}
+          >
+            Manage your account information
+          </p>
+        </div>
 
-      <div className="grid gap-6 md:grid-cols-3">
-        {/* User Info Card */}
-        <Card className="md:col-span-1">
-          <CardHeader>
-            <CardTitle>Thông tin</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-col items-center space-y-4">
-              <Avatar className="h-24 w-24">
-                <AvatarFallback className="bg-primary text-2xl text-primary-foreground">
-                  {userData?.fullName ? getInitials(userData.fullName) : 'U'}
-                </AvatarFallback>
-              </Avatar>
-              <div className="text-center">
-                <h3 className="font-semibold">{userData?.fullName}</h3>
-                <p className="text-sm text-muted-foreground">
-                  @{userData?.username}
-                </p>
-              </div>
-            </div>
-
-            <Separator />
-
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 text-sm">
-                <Mail className="h-4 w-4 text-muted-foreground" />
-                <span className="break-all">{userData?.email}</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm">
-                <Calendar className="h-4 w-4 text-muted-foreground" />
-                <span>
-                  Tham gia:{' '}
-                  {userData?.createdAt
-                    ? helpers.convertToDateDDMMYYYY(userData.createdAt)
-                    : 'N/A'}
-                </span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Edit Profile Card */}
-        <Card className="md:col-span-2">
-          <CardHeader>
-            <CardTitle>Chỉnh sửa hồ sơ</CardTitle>
-            <CardDescription>
-              Cập nhật thông tin cá nhân của bạn tại đây
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Form {...form}>
-              <form
-                onSubmit={form.handleSubmit(onSubmit)}
-                className="space-y-6"
+        <div className="grid gap-6 md:grid-cols-3">
+          {/* User Info Card */}
+          <Card className="border-cyan-200 shadow-lg md:col-span-1">
+            <CardHeader className="border-b border-cyan-200 bg-gradient-to-r from-cyan-50 to-blue-50">
+              <CardTitle
+                className="text-cyan-700"
+                style={{ fontFamily: 'LatoBlack, sans-serif' }}
               >
-                {/* Username Field */}
-                <FormField
-                  control={form.control}
-                  name="username"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Tên đăng nhập</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="Nhập tên đăng nhập..."
-                          disabled={true}
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        Tên đăng nhập dùng để đăng nhập vào hệ thống
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {/* Email Field */}
-                <FormField
-                  control={form.control}
-                  name="email"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Email</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="email"
-                          placeholder="Nhập email..."
-                          disabled={loading}
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        Địa chỉ email của bạn để liên hệ
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {/* Full Name Field */}
-                <FormField
-                  control={form.control}
-                  name="fullName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Họ và tên</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="Nhập họ và tên..."
-                          disabled={loading}
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        Tên đầy đủ của bạn để hiển thị
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <div className="flex gap-4">
-                  <Button type="submit" disabled={loading} className="flex-1">
-                    {loading && (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    )}
-                    {loading ? 'Đang cập nhật...' : 'Cập nhật hồ sơ'}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => navigate(-1)}
-                    disabled={loading}
+                Information
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4 pt-6">
+              <div className="flex flex-col items-center space-y-4">
+                <Avatar className="h-24 w-24 ring-4 ring-cyan-200">
+                  <AvatarFallback className="bg-gradient-to-br from-cyan-500 to-blue-600 text-2xl font-bold text-white">
+                    {userData?.fullName ? getInitials(userData.fullName) : 'U'}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="text-center">
+                  <h3
+                    className="text-lg font-semibold text-gray-800"
+                    style={{ fontFamily: 'LatoBlack, sans-serif' }}
                   >
-                    Hủy
-                  </Button>
+                    {userData?.fullName}
+                  </h3>
+                  <p className="text-sm font-medium text-cyan-600">
+                    @{userData?.username}
+                  </p>
                 </div>
-              </form>
-            </Form>
-          </CardContent>
-        </Card>
+              </div>
+
+              <Separator className="bg-cyan-200" />
+
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-sm">
+                  <Mail className="h-4 w-4 text-cyan-600" />
+                  <span className="break-all text-gray-700">
+                    {userData?.email}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <Calendar className="h-4 w-4 text-cyan-600" />
+                  <span className="text-gray-700">
+                    Joined:{' '}
+                    {userData?.createdAt
+                      ? helpers.convertToDateDDMMYYYY(userData.createdAt)
+                      : 'N/A'}
+                  </span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Edit Profile Card */}
+          <Card className="border-cyan-200 shadow-lg md:col-span-2">
+            <CardHeader className="border-b border-cyan-200 bg-gradient-to-r from-cyan-50 to-blue-50">
+              <CardTitle
+                className="text-cyan-700"
+                style={{ fontFamily: 'LatoBlack, sans-serif' }}
+              >
+                Edit Profile
+              </CardTitle>
+              <CardDescription className="text-gray-600">
+                Update your personal information here
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Form {...form}>
+                <form
+                  onSubmit={form.handleSubmit(onSubmit)}
+                  className="space-y-6"
+                >
+                  {/* Username Field - Read Only */}
+                  <div className="space-y-2">
+                    <label
+                      className="text-sm font-medium leading-none text-gray-700"
+                      style={{ fontFamily: 'LatoBlack, sans-serif' }}
+                    >
+                      Username
+                    </label>
+                    <Input
+                      value={userData?.username || ''}
+                      disabled={true}
+                      className="border-cyan-200 bg-cyan-50 text-gray-700"
+                    />
+                  </div>
+
+                  {/* Email Field - Read Only */}
+                  <div className="space-y-2">
+                    <label
+                      className="text-sm font-medium leading-none text-gray-700"
+                      style={{ fontFamily: 'LatoBlack, sans-serif' }}
+                    >
+                      Email
+                    </label>
+                    <Input
+                      value={userData?.email || ''}
+                      disabled={true}
+                      className="border-cyan-200 bg-cyan-50 text-gray-700"
+                    />
+                  </div>
+
+                  {/* Full Name Field - Editable */}
+                  <FormField
+                    control={form.control}
+                    name="fullName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel
+                          className="text-gray-700"
+                          style={{ fontFamily: 'LatoBlack, sans-serif' }}
+                        >
+                          Full Name
+                        </FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="Enter your full name..."
+                            disabled={loading}
+                            className="border-cyan-200 focus:border-cyan-500 focus:ring-cyan-500"
+                            {...field}
+                          />
+                        </FormControl>
+
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <div className="flex gap-4 pt-4">
+                    <Button
+                      type="submit"
+                      disabled={loading}
+                      className="flex-1 bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-lg transition-all duration-200 hover:from-cyan-700 hover:to-blue-700"
+                      style={{ fontFamily: 'LatoBlack, sans-serif' }}
+                    >
+                      {loading && (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      )}
+                      {loading ? 'Updating...' : 'Update Profile'}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => navigate(-1)}
+                      disabled={loading}
+                      className="border-cyan-300 text-cyan-700 hover:border-cyan-400 hover:bg-cyan-50"
+                      style={{ fontFamily: 'LatoBlack, sans-serif' }}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </form>
+              </Form>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );

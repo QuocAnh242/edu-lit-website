@@ -1,11 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import helpers from '@/helpers';
+import { User } from '@/types/user.type';
 
 const Navbar = () => {
   const navigate = useNavigate();
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     // Check if user is logged in
@@ -21,6 +24,23 @@ const Navbar = () => {
         console.error('Error parsing user data:', error);
       }
     }
+  }, []);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
+        setShowDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
   }, []);
 
   const handleLogout = () => {
@@ -135,22 +155,69 @@ const Navbar = () => {
           {/* Right side - Auth Buttons or User Info */}
           <div className="flex items-center space-x-4">
             {isLoggedIn && user ? (
-              <>
-                <span
-                  className="text-base font-medium text-gray-700"
-                  style={{ fontFamily: 'LatoBlack, sans-serif' }}
-                >
-                  Welcome,{' '}
-                  <span className="text-cyan-600">{user.fullName}</span>
-                </span>
+              <div className="relative" ref={dropdownRef}>
                 <button
-                  onClick={handleLogout}
-                  className="rounded-md bg-red-600 px-4 py-2 text-base font-medium text-white transition-colors duration-200 hover:bg-red-700"
+                  onClick={() => setShowDropdown(!showDropdown)}
+                  className="flex items-center space-x-2 rounded-md px-4 py-2 text-base font-medium text-cyan-600 transition-all duration-200 hover:bg-cyan-50 hover:text-cyan-700"
                   style={{ fontFamily: 'LatoBlack, sans-serif' }}
                 >
-                  Log Out
+                  <span>{user.username}</span>
+                  <svg
+                    className={`h-4 w-4 transition-transform duration-200 ${
+                      showDropdown ? 'rotate-180' : ''
+                    }`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 9l-7 7-7-7"
+                    />
+                  </svg>
                 </button>
-              </>
+
+                {/* Dropdown Menu */}
+                {showDropdown && (
+                  <div className="absolute right-0 mt-2 w-48 rounded-md border border-cyan-100 bg-white shadow-lg ring-1 ring-cyan-200">
+                    <div className="py-1">
+                      <button
+                        onClick={() => {
+                          setShowDropdown(false);
+                          navigate('/profile');
+                        }}
+                        className="block w-full px-4 py-2 text-left text-sm text-gray-700 transition-colors duration-200 hover:bg-cyan-50 hover:text-cyan-600"
+                        style={{ fontFamily: 'LatoBlack, sans-serif' }}
+                      >
+                        Profile
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowDropdown(false);
+                          navigate('/change-password');
+                        }}
+                        className="block w-full px-4 py-2 text-left text-sm text-gray-700 transition-colors duration-200 hover:bg-cyan-50 hover:text-cyan-600"
+                        style={{ fontFamily: 'LatoBlack, sans-serif' }}
+                      >
+                        Change Password
+                      </button>
+                      <div className="my-1 border-t border-cyan-100"></div>
+                      <button
+                        onClick={() => {
+                          setShowDropdown(false);
+                          handleLogout();
+                        }}
+                        className="block w-full px-4 py-2 text-left text-sm text-red-600 transition-colors duration-200 hover:bg-red-50 hover:text-red-700"
+                        style={{ fontFamily: 'LatoBlack, sans-serif' }}
+                      >
+                        Log Out
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             ) : (
               <>
                 <Link

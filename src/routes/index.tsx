@@ -13,6 +13,7 @@ const HomePage = lazy(() => import('@/pages/HomePage/index'));
 const LessonPage = lazy(() => import('@/pages/SyllabusPage/index'));
 const CoursePage = lazy(() => import('@/pages/Course/index'));
 const UserProfilePage = lazy(() => import('@/pages/UserProfile/index'));
+const ChangePasswordPage = lazy(() => import('@/pages/ChangePassword/index'));
 const CreateQuestionPage = lazy(() => import('@/pages/CreateQuestionPage'));
 const QuestionsPage = lazy(() => import('@/pages/QuestionsPage'));
 const ViewQuestionPage = lazy(() => import('@/pages/ViewQuestionPage'));
@@ -63,6 +64,14 @@ export default function AppRouter() {
           element: (
             <Suspense fallback={<div>Loading...</div>}>
               <UserProfilePage />
+            </Suspense>
+          )
+        },
+        {
+          path: '/change-password',
+          element: (
+            <Suspense fallback={<div>Loading...</div>}>
+              <ChangePasswordPage />
             </Suspense>
           )
         },
