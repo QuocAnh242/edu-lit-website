@@ -61,7 +61,7 @@ export const useGetQuestionBanks = () => {
   return useQuery({
     queryKey: ['question-banks'],
     queryFn: async () => {
-      return BaseRequest.Get('/api/v1/QuestionBank');
+      return BaseRequest.Get('/api/v1/questionbank');
     }
   });
 };
@@ -71,7 +71,7 @@ export const useCreateQuestion = () => {
   return useMutation({
     mutationKey: ['create-question'],
     mutationFn: async (data: CreateQuestionRequest) => {
-      return BaseRequest.Post('/api/v1/Question', data);
+      return BaseRequest.Post('/api/v1/question', data);
     }
   });
 };
@@ -81,7 +81,7 @@ export const useCreateQuestionOption = () => {
   return useMutation({
     mutationKey: ['create-question-option'],
     mutationFn: async (data: CreateQuestionOptionRequest) => {
-      return BaseRequest.Post('/api/v1/QuestionOption', data);
+      return BaseRequest.Post('/api/v1/questionoption', data);
     }
   });
 };
@@ -91,7 +91,7 @@ export const useGetAllQuestions = () => {
   return useQuery({
     queryKey: ['all-questions'],
     queryFn: async () => {
-      return BaseRequest.Get('/api/v1/Question');
+      return BaseRequest.Get('/api/v1/question');
     }
   });
 };
@@ -101,7 +101,7 @@ export const useGetQuestionById = (id: string) => {
   return useQuery({
     queryKey: ['question', id],
     queryFn: async () => {
-      return BaseRequest.Get(`/api/v1/Question/${id}`);
+      return BaseRequest.Get(`/api/v1/question/${id}`);
     },
     enabled: !!id
   });
@@ -112,7 +112,7 @@ export const useGetQuestionOptions = (questionId: string) => {
   return useQuery({
     queryKey: ['question-options', questionId],
     queryFn: async () => {
-      return BaseRequest.Get(`/api/v1/QuestionOption/question/${questionId}`);
+      return BaseRequest.Get(`/api/v1/questionoption/question/${questionId}`);
     },
     enabled: !!questionId
   });
