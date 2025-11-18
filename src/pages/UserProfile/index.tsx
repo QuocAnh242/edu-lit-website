@@ -3,8 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
-import { Loader2, Mail, Calendar } from 'lucide-react';
+import { Loader2, Mail, Calendar, Eye, EyeOff, Lock } from 'lucide-react';
 
+import Navbar from '@/components/shared/navbar';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -28,6 +29,7 @@ import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
 import { getUserById, updateUser } from '@/services/user.api';
+import { changePassword } from '@/services/auth.api';
 import { User } from '@/types/user.type';
 import helpers from '@/helpers';
 
@@ -44,14 +46,33 @@ const profileFormSchema = z.object({
     .max(100, { message: 'Họ và tên không được vượt quá 100 ký tự' })
 });
 
+// Change password form validation schema
+const changePasswordSchema = z
+  .object({
+    oldPassword: z.string().min(1, { message: 'Mật khẩu cũ là bắt buộc' }),
+    newPassword: z
+      .string()
+      .min(8, { message: 'Mật khẩu mới phải có ít nhất 8 ký tự' }),
+    confirmPassword: z.string()
+  })
+  .refine((data) => data.newPassword === data.confirmPassword, {
+    message: 'Mật khẩu xác nhận không khớp',
+    path: ['confirmPassword']
+  });
+
 type ProfileFormValues = z.infer<typeof profileFormSchema>;
+type ChangePasswordFormValues = z.infer<typeof changePasswordSchema>;
 
 export default function UserProfile() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
   const [fetchingUser, setFetchingUser] = useState(true);
   const [userData, setUserData] = useState<User | null>(null);
+  const [showOldPassword, setShowOldPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const form = useForm<ProfileFormValues>({
     resolver: zodResolver(profileFormSchema),
@@ -59,6 +80,15 @@ export default function UserProfile() {
       username: '',
       email: '',
       fullName: ''
+    }
+  });
+
+  const changePasswordForm = useForm<ChangePasswordFormValues>({
+    resolver: zodResolver(changePasswordSchema),
+    defaultValues: {
+      oldPassword: '',
+      newPassword: '',
+      confirmPassword: ''
     }
   });
 
@@ -191,6 +221,57 @@ export default function UserProfile() {
     }
   };
 
+  const onSubmitChangePassword = async (data: ChangePasswordFormValues) => {
+    setChangingPassword(true);
+    try {
+      const response = await changePassword({
+        oldPassword: data.oldPassword,
+        newPassword: data.newPassword
+      });
+
+      if (response.success) {
+        toast({
+          title: 'Đổi mật khẩu thành công!',
+          description:
+            response.message || 'Mật khẩu của bạn đã được thay đổi thành công.',
+          variant: 'default'
+        });
+
+        // Reset form
+        changePasswordForm.reset();
+      } else {
+        toast({
+          title: 'Đổi mật khẩu thất bại',
+          description: response.message || 'Không thể đổi mật khẩu',
+          variant: 'destructive'
+        });
+      }
+    } catch (error) {
+      console.error('Change password error:', error);
+
+      let errorMessage = 'Không thể đổi mật khẩu';
+      const err = error as {
+        response?: {
+          data?: { message?: string; errors?: Record<string, string[]> };
+        };
+      };
+      if (err.response?.data?.message) {
+        errorMessage = err.response.data.message;
+      } else if (err.response?.data?.errors) {
+        const errors = err.response.data.errors;
+        errorMessage = Object.values(errors).flat().join(', ');
+      }
+
+      toast({
+        title: 'Lỗi',
+        description: errorMessage,
+        variant: 'destructive'
+      });
+    } finally {
+      setChangingPassword(false);
+    }
+  };
+
   if (fetchingUser) {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -209,148 +290,302 @@ export default function UserProfile() {
   };
 
   return (
-    <div className="container mx-auto max-w-4xl p-6">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold tracking-tight">Hồ sơ cá nhân</h1>
-        <p className="text-muted-foreground">
-          Quản lý thông tin tài khoản của bạn
-        </p>
-      </div>
+    <div>
+      <Navbar />
+      <div className="container mx-auto max-w-4xl p-6">
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold tracking-tight">Hồ sơ cá nhân</h1>
+          <p className="text-muted-foreground">
+            Quản lý thông tin tài khoản của bạn
+          </p>
+        </div>
 
-      <div className="grid gap-6 md:grid-cols-3">
-        {/* User Info Card */}
-        <Card className="md:col-span-1">
+        <div className="grid gap-6 md:grid-cols-3">
+          {/* User Info Card */}
+          <Card className="md:col-span-1">
+            <CardHeader>
+              <CardTitle>Thông tin</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex flex-col items-center space-y-4">
+                <Avatar className="h-24 w-24">
+                  <AvatarFallback className="bg-primary text-2xl text-primary-foreground">
+                    {userData?.fullName ? getInitials(userData.fullName) : 'U'}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="text-center">
+                  <h3 className="font-semibold">{userData?.fullName}</h3>
+                  <p className="text-sm text-muted-foreground">
+                    @{userData?.username}
+                  </p>
+                </div>
+              </div>
+
+              <Separator />
+
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-sm">
+                  <Mail className="h-4 w-4 text-muted-foreground" />
+                  <span className="break-all">{userData?.email}</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <Calendar className="h-4 w-4 text-muted-foreground" />
+                  <span>
+                    Tham gia:{' '}
+                    {userData?.createdAt
+                      ? helpers.convertToDateDDMMYYYY(userData.createdAt)
+                      : 'N/A'}
+                  </span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Edit Profile Card */}
+          <Card className="md:col-span-2">
+            <CardHeader>
+              <CardTitle>Chỉnh sửa hồ sơ</CardTitle>
+              <CardDescription>
+                Cập nhật thông tin cá nhân của bạn tại đây
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Form {...form}>
+                <form
+                  onSubmit={form.handleSubmit(onSubmit)}
+                  className="space-y-6"
+                >
+                  {/* Username Field */}
+                  <FormField
+                    control={form.control}
+                    name="username"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Tên đăng nhập</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="Nhập tên đăng nhập..."
+                            disabled={true}
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Tên đăng nhập dùng để đăng nhập vào hệ thống
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Email Field */}
+                  <FormField
+                    control={form.control}
+                    name="email"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Email</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="email"
+                            placeholder="Nhập email..."
+                            disabled={loading}
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Địa chỉ email của bạn để liên hệ
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Full Name Field */}
+                  <FormField
+                    control={form.control}
+                    name="fullName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Họ và tên</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="Nhập họ và tên..."
+                            disabled={loading}
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Tên đầy đủ của bạn để hiển thị
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <div className="flex gap-4">
+                    <Button type="submit" disabled={loading} className="flex-1">
+                      {loading && (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      )}
+                      {loading ? 'Đang cập nhật...' : 'Cập nhật hồ sơ'}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => navigate(-1)}
+                      disabled={loading}
+                    >
+                      Hủy
+                    </Button>
+                  </div>
+                </form>
+              </Form>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Change Password Card */}
+        <Card className="mt-6">
           <CardHeader>
-            <CardTitle>Thông tin</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-col items-center space-y-4">
-              <Avatar className="h-24 w-24">
-                <AvatarFallback className="bg-primary text-2xl text-primary-foreground">
-                  {userData?.fullName ? getInitials(userData.fullName) : 'U'}
-                </AvatarFallback>
-              </Avatar>
-              <div className="text-center">
-                <h3 className="font-semibold">{userData?.fullName}</h3>
-                <p className="text-sm text-muted-foreground">
-                  @{userData?.username}
-                </p>
-              </div>
-            </div>
-
-            <Separator />
-
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 text-sm">
-                <Mail className="h-4 w-4 text-muted-foreground" />
-                <span className="break-all">{userData?.email}</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm">
-                <Calendar className="h-4 w-4 text-muted-foreground" />
-                <span>
-                  Tham gia:{' '}
-                  {userData?.createdAt
-                    ? helpers.convertToDateDDMMYYYY(userData.createdAt)
-                    : 'N/A'}
-                </span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Edit Profile Card */}
-        <Card className="md:col-span-2">
-          <CardHeader>
-            <CardTitle>Chỉnh sửa hồ sơ</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <Lock className="h-5 w-5" />
+              Đổi mật khẩu
+            </CardTitle>
             <CardDescription>
-              Cập nhật thông tin cá nhân của bạn tại đây
+              Thay đổi mật khẩu của bạn để bảo mật tài khoản
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Form {...form}>
+            <Form {...changePasswordForm}>
               <form
-                onSubmit={form.handleSubmit(onSubmit)}
+                onSubmit={changePasswordForm.handleSubmit(
+                  onSubmitChangePassword
+                )}
                 className="space-y-6"
               >
-                {/* Username Field */}
+                {/* Old Password Field */}
                 <FormField
-                  control={form.control}
-                  name="username"
+                  control={changePasswordForm.control}
+                  name="oldPassword"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Tên đăng nhập</FormLabel>
+                      <FormLabel>Mật khẩu hiện tại</FormLabel>
                       <FormControl>
-                        <Input
-                          placeholder="Nhập tên đăng nhập..."
-                          disabled={true}
-                          {...field}
-                        />
+                        <div className="relative">
+                          <Input
+                            {...field}
+                            type={showOldPassword ? 'text' : 'password'}
+                            placeholder="Nhập mật khẩu hiện tại..."
+                            disabled={changingPassword}
+                            className="pr-10"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowOldPassword(!showOldPassword)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 transform text-gray-400 hover:text-gray-600"
+                          >
+                            {showOldPassword ? (
+                              <EyeOff className="h-4 w-4" />
+                            ) : (
+                              <Eye className="h-4 w-4" />
+                            )}
+                          </button>
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* New Password Field */}
+                <FormField
+                  control={changePasswordForm.control}
+                  name="newPassword"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Mật khẩu mới</FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                          <Input
+                            {...field}
+                            type={showNewPassword ? 'text' : 'password'}
+                            placeholder="Nhập mật khẩu mới..."
+                            disabled={changingPassword}
+                            className="pr-10"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowNewPassword(!showNewPassword)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 transform text-gray-400 hover:text-gray-600"
+                          >
+                            {showNewPassword ? (
+                              <EyeOff className="h-4 w-4" />
+                            ) : (
+                              <Eye className="h-4 w-4" />
+                            )}
+                          </button>
+                        </div>
                       </FormControl>
                       <FormDescription>
-                        Tên đăng nhập dùng để đăng nhập vào hệ thống
+                        Mật khẩu mới phải có ít nhất 8 ký tự
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
 
-                {/* Email Field */}
+                {/* Confirm Password Field */}
                 <FormField
-                  control={form.control}
-                  name="email"
+                  control={changePasswordForm.control}
+                  name="confirmPassword"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Email</FormLabel>
+                      <FormLabel>Xác nhận mật khẩu mới</FormLabel>
                       <FormControl>
-                        <Input
-                          type="email"
-                          placeholder="Nhập email..."
-                          disabled={loading}
-                          {...field}
-                        />
+                        <div className="relative">
+                          <Input
+                            {...field}
+                            type={showConfirmPassword ? 'text' : 'password'}
+                            placeholder="Nhập lại mật khẩu mới..."
+                            disabled={changingPassword}
+                            className="pr-10"
+                          />
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setShowConfirmPassword(!showConfirmPassword)
+                            }
+                            className="absolute right-3 top-1/2 -translate-y-1/2 transform text-gray-400 hover:text-gray-600"
+                          >
+                            {showConfirmPassword ? (
+                              <EyeOff className="h-4 w-4" />
+                            ) : (
+                              <Eye className="h-4 w-4" />
+                            )}
+                          </button>
+                        </div>
                       </FormControl>
-                      <FormDescription>
-                        Địa chỉ email của bạn để liên hệ
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {/* Full Name Field */}
-                <FormField
-                  control={form.control}
-                  name="fullName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Họ và tên</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="Nhập họ và tên..."
-                          disabled={loading}
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        Tên đầy đủ của bạn để hiển thị
-                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
 
                 <div className="flex gap-4">
-                  <Button type="submit" disabled={loading} className="flex-1">
-                    {loading && (
+                  <Button
+                    type="submit"
+                    disabled={changingPassword}
+                    className="flex-1"
+                  >
+                    {changingPassword && (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     )}
-                    {loading ? 'Đang cập nhật...' : 'Cập nhật hồ sơ'}
+                    {changingPassword ? 'Đang đổi mật khẩu...' : 'Đổi mật khẩu'}
                   </Button>
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => navigate(-1)}
-                    disabled={loading}
+                    onClick={() => changePasswordForm.reset()}
+                    disabled={changingPassword}
                   >
                     Hủy
                   </Button>

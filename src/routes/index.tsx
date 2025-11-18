@@ -9,6 +9,7 @@ const DashboardLayout = lazy(
 
 const SignInPage = lazy(() => import('@/pages/auth/signin'));
 const SignUpPage = lazy(() => import('@/pages/auth/signup'));
+const ForgetPasswordPage = lazy(() => import('@/pages/auth/forget-password'));
 const HomePage = lazy(() => import('@/pages/HomePage/index'));
 const LessonPage = lazy(() => import('@/pages/SyllabusPage/index'));
 const CoursePage = lazy(() => import('@/pages/Course/index'));
@@ -190,6 +191,14 @@ export default function AppRouter() {
     {
       path: '/signup',
       element: <SignUpPage />
+    },
+    {
+      path: '/forget-password',
+      element: (
+        <Suspense fallback={<div>Loading...</div>}>
+          <ForgetPasswordPage />
+        </Suspense>
+      )
     },
     {
       path: '/404',

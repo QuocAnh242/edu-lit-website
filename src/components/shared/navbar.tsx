@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
+import { User } from 'lucide-react';
 import helpers from '@/helpers';
 
 const Navbar = () => {
@@ -143,6 +144,14 @@ const Navbar = () => {
                   Welcome,{' '}
                   <span className="text-cyan-600">{user.fullName}</span>
                 </span>
+                <button
+                  onClick={() => navigate('/profile')}
+                  className="flex items-center justify-center rounded-md border border-cyan-600 bg-white p-2 text-cyan-600 transition-colors duration-200 hover:bg-cyan-50 hover:text-cyan-700"
+                  title="Profile"
+                  aria-label="Go to profile"
+                >
+                  <User className="h-5 w-5" />
+                </button>
                 <button
                   onClick={handleLogout}
                   className="rounded-md bg-red-600 px-4 py-2 text-base font-medium text-white transition-colors duration-200 hover:bg-red-700"

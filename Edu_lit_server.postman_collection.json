@@ -1,0 +1,637 @@
+{
+  "info": {
+    "_postman_id": "7f0fd418-488c-4b5e-900f-e1bfb1e53614",
+    "name": "Edu_lit_server",
+    "schema": "https://schema.getpostman.com/json/collection/v2.0.0/collection.json",
+    "_exporter_id": "49504460",
+    "_collection_link": "https://swp391g5eventflowerexchange.postman.co/workspace/PRN232_Literature-Project~f3798e65-a4b8-47f4-b9b0-70b3b0b0b2bb/collection/38203291-7f0fd418-488c-4b5e-900f-e1bfb1e53614?action=share&source=collection_link&creator=49504460"
+  },
+  "item": [
+    {
+      "name": "Auth-Service",
+      "item": [
+        {
+          "name": "Authentication",
+          "item": [
+            {
+              "name": "Register",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [""],
+                    "type": "text/javascript",
+                    "packages": {},
+                    "requests": {}
+                  }
+                },
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "exec": [
+                      "// 1. Lấy data từ request bạn vừa gửi đi\r",
+                      "const requestData = JSON.parse(pm.request.body.raw);\r",
+                      "\r",
+                      "// 2. Lưu thẳng vào environment\r",
+                      "pm.environment.set(\"saved_username\", requestData.username);\r",
+                      "pm.environment.set(\"saved_password\", requestData.password);"
+                    ],
+                    "type": "text/javascript",
+                    "packages": {},
+                    "requests": {}
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\r\n  \"username\": \"tranhoquocanh\",\r\n  \"email\": \"hihihehe@gmail.com\",\r\n  \"password\": \"123456\",\r\n  \"fullName\": \"Tran Ho Quoc Anh\"\r\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": "{{base_url}}api/v1/auth/register"
+              },
+              "response": [
+                {
+                  "name": "Register",
+                  "originalRequest": {
+                    "method": "POST",
+                    "header": [],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\r\n  \"username\": \"tranhoquocanh\",\r\n  \"email\": \"hihihehe@gmail.com\",\r\n  \"password\": \"123456\",\r\n  \"fullName\": \"Tran Ho Quoc Anh\"\r\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": "{{base_url}}api/v1/auth/register"
+                  },
+                  "status": "OK",
+                  "code": 200,
+                  "_postman_previewlanguage": "",
+                  "header": [
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json; charset=utf-8"
+                    },
+                    {
+                      "key": "Date",
+                      "value": "Mon, 10 Nov 2025 02:22:42 GMT"
+                    },
+                    {
+                      "key": "Server",
+                      "value": "Kestrel"
+                    },
+                    {
+                      "key": "Transfer-Encoding",
+                      "value": "chunked"
+                    }
+                  ],
+                  "cookie": [],
+                  "body": "{\n    \"success\": true,\n    \"message\": \"Register successfully \",\n    \"data\": {\n        \"id\": \"b4e315f6-c18d-46c1-87e6-3a6e0475f1a2\",\n        \"username\": \"tranhoquocanh\",\n        \"email\": \"hihihehe@gmail.com\",\n        \"fullName\": \"Tran Ho Quoc Anh\",\n        \"roleId\": \"332569ba-3cfd-4126-ba10-b592a38df7c7\",\n        \"roleName\": \"STUDENT\",\n        \"token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJiNGUzMTVmNi1jMThkLTQ2YzEtODdlNi0zYTZlMDQ3NWYxYTIiLCJ1bmlxdWVfbmFtZSI6InRyYW5ob3F1b2NhbmgiLCJlbWFpbCI6ImhpaGloZWhlQGdtYWlsLmNvbSIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvcm9sZSI6IlNUVURFTlQiLCJleHAiOjE3NjI3NTIxNjIsImlzcyI6IkVkdUxpdC5BdXRoIiwiYXVkIjoiRWR1TGl0LlVzZXJzIn0.ACYazZ5X1uiyq6ne_VUZk3pmB0yFifZ9bbDjM018MYk\",\n        \"createdAt\": \"2025-11-10T02:22:42.4794517Z\"\n    },\n    \"errorCode\": null\n}"
+                }
+              ]
+            },
+            {
+              "name": "Login",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "// 1. Chỉ chạy nếu request thành công\r",
+                      "if (pm.response.code === 200) {\r",
+                      "\r",
+                      "    // 2. Lấy nội dung JSON từ response\r",
+                      "    var jsonData = pm.response.json();\r",
+                      "\r",
+                      "    // 3. Lấy token (dòng này của bạn đã đúng)\r",
+                      "    pm.collectionVariables.set(\"token\", jsonData.data.token, \"secret\");\r",
+                      "\r",
+                      "    // 4. Lấy user ID (Sửa \"jsonData.data.user_id\" thành \"jsonData.data.id\")\r",
+                      "    pm.collectionVariables.set(\"user_id\", jsonData.data.id, \"secret\");\r",
+                      "\r",
+                      "}"
+                    ],
+                    "type": "text/javascript",
+                    "packages": {},
+                    "requests": {}
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\r\n  \"username\": \"tranhoquocanh\",\r\n  \"password\": \"123456\"\r\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": "{{base_url}}api/v1/auth/login"
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "User",
+          "item": [
+            {
+              "name": "Get All Users",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{base_url}}api/v1/user"
+              },
+              "response": []
+            },
+            {
+              "name": "Get User By Id",
+              "protocolProfileBehavior": {
+                "disableBodyPruning": true
+              },
+              "request": {
+                "method": "GET",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\r\n  \"id\": \"3fa85f64-5717-4562-b3fc-2c963f66afa6\",\r\n  \"username\": \"string\",\r\n  \"email\": \"string\",\r\n  \"fullName\": \"string\",\r\n  \"roleId\": \"3fa85f64-5717-4562-b3fc-2c963f66afa6\",\r\n  \"roleName\": \"string\",\r\n  \"token\": \"string\",\r\n  \"createdAt\": \"2025-10-25T14:00:46.213Z\"\r\n}"
+                },
+                "url": "{{base_url}}api/v1/user/{{user_id}}"
+              },
+              "response": []
+            },
+            {
+              "name": "Get Paged All User",
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "accept",
+                    "value": "*/*"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}api/v1/user?page=1&pageSize=20",
+                  "host": ["{{base_url}}api"],
+                  "path": ["v1", "user"],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "pageSize",
+                      "value": "20"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Create User",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\r\n  \"id\": \"3fa85f64-5717-4562-b3fc-2c963f66afa6\",\r\n  \"username\": \"string\",\r\n  \"email\": \"string\",\r\n  \"fullName\": \"string\",\r\n  \"roleId\": \"3fa85f64-5717-4562-b3fc-2c963f66afa6\",\r\n  \"roleName\": \"string\",\r\n  \"token\": \"string\",\r\n  \"createdAt\": \"2025-10-25T14:00:46.213Z\"\r\n}"
+                },
+                "url": "{{base_url}}api/v1/User"
+              },
+              "response": []
+            },
+            {
+              "name": "Update User Information",
+              "request": {
+                "method": "PUT",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\r\n    \"id\": \"35156b59-d2b8-41e5-93c6-602abedb15b0\",\r\n    \"username\": \"quocanhdeptrai\",\r\n    \"email\": \"qanhdeptrai@gmail.com\",\r\n    \"fullName\": \"Tran Ho Quoc Anh\",\r\n    \"roleId\": \"0057a25f-1a53-4505-96a3-af3c7c049c61\",\r\n    \"roleName\": null,\r\n    \"createdAt\": \"2025-10-31T00:37:04.37Z\"\r\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": "{{base_url}}api/v1/user/{{user_id}}"
+              },
+              "response": []
+            },
+            {
+              "name": "Delete User",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "accept",
+                    "value": "*/*"
+                  }
+                ],
+                "url": "{{base_url}}api/v1/User/{{user_id}}"
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Role",
+          "item": [
+            {
+              "name": "Create Role",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "accept",
+                    "value": "*/*"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"id\": \"3fa85f64-5717-4562-b3fc-2c963f66afa6\",\n  \"name\": \"string\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": "http://localhost:8001/api/v1/role"
+              },
+              "response": []
+            },
+            {
+              "name": "Get All Roles",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{base_url}}api/v1/Role"
+              },
+              "response": []
+            },
+            {
+              "name": "Get Role by Id",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{base_url}}api/v1/Role/{{studentrole_id}}"
+              },
+              "response": []
+            },
+            {
+              "name": "Update Role",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "accept",
+                    "value": "*/*"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"id\": \"3fa85f64-5717-4562-b3fc-2c963f66afa6\",\n  \"name\": \"string\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": "http://localhost:8001/api/v1/role/3fa85f64-5717-4562-b3fc-2c963f66afa6"
+              },
+              "response": []
+            },
+            {
+              "name": "Delete Role",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "accept",
+                    "value": "*/*"
+                  }
+                ],
+                "url": "http://localhost:8001/api/v1/role/3fa85f64-5717-4562-b3fc-2c963f66afa6"
+              },
+              "response": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Question-Service",
+      "item": [
+        {
+          "name": "Question",
+          "item": [
+            {
+              "name": "Get All Question",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "accept",
+                    "value": "*/*"
+                  }
+                ],
+                "url": "{{base_url}}api/v1/Question"
+              },
+              "response": []
+            },
+            {
+              "name": "Get Question By Id",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{base_url}}api/v1/Question/{{question_id}}"
+              },
+              "response": []
+            },
+            {
+              "name": "Create Question",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "file",
+                  "file": {}
+                },
+                "url": "{{base_url}}api/v1/Question/"
+              },
+              "response": []
+            },
+            {
+              "name": "Update Question",
+              "request": {
+                "method": "PUT",
+                "header": [],
+                "url": "{{base_url}}api/v1/Question/{{question_id}}"
+              },
+              "response": []
+            },
+            {
+              "name": "Delete Question",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": "{{base_url}}api/v1/Question/{{question_id}}"
+              },
+              "response": []
+            },
+            {
+              "name": "Get Question By QuestionBankId",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{base_url}}api/v1/Question/{{questionBank_id}}"
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Question Bank",
+          "item": [
+            {
+              "name": "Get All QuestionBanks",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{base_url}}api/v1/QuestionBank/"
+              },
+              "response": []
+            },
+            {
+              "name": "Create QuestionBank",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": "{{base_url}}api/v1/QuestionBank/"
+              },
+              "response": []
+            },
+            {
+              "name": "New Request",
+              "request": {
+                "method": "PUT",
+                "header": [],
+                "url": "{{base_url}}/api/v1/QuestionBank/{{questionBank_id}}"
+              },
+              "response": []
+            },
+            {
+              "name": "Delete QuestionBank",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": "{{base_url}}api/v1/QuestionBank/{{questionBank_id}}"
+              },
+              "response": []
+            },
+            {
+              "name": "Get QuestionBank By Id",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{base_url}}api/v1/QuestionBank/{{questionBank_id}}"
+              },
+              "response": []
+            },
+            {
+              "name": "Get Question Bank By OwnerId",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{base_url}}api/v1/QuestionBank/{{owner_id}}"
+              },
+              "response": []
+            },
+            {
+              "name": "Get QuestionBank By Subject",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{base_url}}api/v1/QuestionBank/{{subject}}"
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Question Option",
+          "item": [
+            {
+              "name": "Get QuestionOption By Id",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{base_url}}api/v1/QuestionOption/{{questionOption_id}}"
+              },
+              "response": []
+            },
+            {
+              "name": "Update QuestionOption",
+              "request": {
+                "method": "PUT",
+                "header": [],
+                "url": "{{base_url}}api/v1/QuestionOption/{{questionOption_id}}"
+              },
+              "response": []
+            },
+            {
+              "name": "Delete QuestionOption",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": "{{base_url}}api/v1/QuestionOption/{{questionOption_id}}"
+              },
+              "response": []
+            },
+            {
+              "name": "Get All QuestionOptions",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{base_url}}api/v1/QuestionOption/"
+              },
+              "response": []
+            },
+            {
+              "name": "Create Question Option",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": "{{base_url}}api/v1/QuestionOption/"
+              },
+              "response": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Lesson-Service",
+      "item": [
+        {
+          "name": "Syllabus",
+          "item": []
+        },
+        {
+          "name": "Course",
+          "item": []
+        },
+        {
+          "name": "Lesson Context",
+          "item": []
+        },
+        {
+          "name": "Activity",
+          "item": []
+        }
+      ]
+    },
+    {
+      "name": "Assessment-Service",
+      "item": [
+        {
+          "name": "Assessment",
+          "item": [
+            {
+              "name": "Get All Assessment",
+              "request": {
+                "method": "GET",
+                "header": []
+              },
+              "response": []
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "packages": {},
+        "requests": {},
+        "exec": [""]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "packages": {},
+        "requests": {},
+        "exec": [""]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "",
+      "description": {
+        "content": "Base URL for all apis",
+        "type": "text/plain"
+      }
+    },
+    {
+      "key": "token",
+      "value": "",
+      "description": {
+        "content": "Token for retrieving user informations",
+        "type": "text/plain"
+      }
+    },
+    {
+      "key": "studentrole_id",
+      "value": "",
+      "description": {
+        "content": "Student_roleID",
+        "type": "text/plain"
+      }
+    },
+    {
+      "key": "user_id",
+      "value": ""
+    },
+    {
+      "key": "username",
+      "value": "",
+      "type": "default"
+    },
+    {
+      "key": "password",
+      "value": "",
+      "type": "default"
+    }
+  ]
+}
