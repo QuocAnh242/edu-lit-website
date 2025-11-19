@@ -9,8 +9,8 @@ import { User } from '@/types/user.type';
 import helpers from '@/helpers';
 
 const AUTH_API_URL = `${import.meta.env.VITE_API_GATEWAY_URL || 'http://localhost:8000'}/api/v1/Auth`;
-const AUTH_PROFILE_API_URL = 'http://localhost:8001/api/v1/auth';
-const USER_PROFILE_API_URL = 'http://localhost:8005/api/v1/user';
+const AUTH_PROFILE_API_URL = `${import.meta.env.VITE_API_GATEWAY_URL || 'http://localhost:8000'}/api/v1/Auth`;
+const USER_PROFILE_API_URL = `${import.meta.env.VITE_API_GATEWAY_URL || 'http://localhost:8000'}/api/v1/user`;
 
 // Create a separate axios instance for auth API (without global interceptors)
 const authAxios = axios.create({
