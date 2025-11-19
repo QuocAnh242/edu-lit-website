@@ -10,17 +10,29 @@ import helpers from '@/helpers';
 
 const AUTH_API_URL = `${import.meta.env.VITE_API_GATEWAY_URL || 'http://localhost:8000'}/api/v1/Auth`;
 const AUTH_PROFILE_API_URL = 'http://localhost:8001/api/v1/auth';
+const USER_PROFILE_API_URL = 'http://localhost:8005/api/v1/user';
 
 // Create a separate axios instance for auth API (without global interceptors)
 const authAxios = axios.create({
   baseURL: AUTH_API_URL
 });
 
-// Create axios instance for profile API with auth token
+// Create axios instance for profile API with auth token (for PUT/update operations)
 const createProfileAxios = () => {
   const token = helpers.cookie_get('AT');
   return axios.create({
     baseURL: AUTH_PROFILE_API_URL,
+    headers: {
+      Authorization: token ? `Bearer ${token}` : ''
+    }
+  });
+};
+
+// Create axios instance for GET profile API with auth token (port 8005)
+const createUserProfileAxios = () => {
+  const token = helpers.cookie_get('AT');
+  return axios.create({
+    baseURL: USER_PROFILE_API_URL,
     headers: {
       Authorization: token ? `Bearer ${token}` : ''
     }
@@ -95,8 +107,8 @@ export interface UpdateProfileResponse {
  */
 export const getProfile = async (): Promise<ProfileResponse> => {
   try {
-    const profileAxios = createProfileAxios();
-    const response = await profileAxios.get<ProfileResponse>('/profile');
+    const userProfileAxios = createUserProfileAxios();
+    const response = await userProfileAxios.get<ProfileResponse>('/profile');
     return response.data;
   } catch (error) {
     console.error('Get Profile Error:', error);
