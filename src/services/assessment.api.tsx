@@ -5,10 +5,16 @@ import BaseRequest from '@/config/axios.config';
 // ============================================================================
 
 // ObjectResponse structure from backend
+// Note: Backend uses PascalCase (ErrorCode, Message, Data)
+// but JSON serialization typically converts to camelCase
 export interface ObjectResponse<T> {
   errorCode?: string;
   message?: string;
   data?: T;
+  // Also support PascalCase in case backend returns it directly
+  ErrorCode?: string;
+  Message?: string;
+  Data?: T;
 }
 
 // Assessment Types
@@ -64,6 +70,11 @@ export interface CreateAssessmentQuestionRequest {
   correctAnswer: string; // A, B, C, D
 }
 
+export interface CreateAssessmentQuestionsRequest {
+  assessmentId: number;
+  questionIds: string[]; // Array of question IDs (Guid)
+}
+
 export interface UpdateAssessmentQuestionRequest {
   assessmentQuestionId: number;
   assessmentId: number;
@@ -77,25 +88,25 @@ export interface AssessmentAnswerDto {
   answerId: number;
   assessmentQuestionId: number;
   attemptsId: number;
-  selectedAnswer: string; // A, B, C, D
+  selectedOptionId: string; // Guid of QuestionOption
   isCorrect: boolean;
   createdAt?: string;
   updatedAt?: string;
+  // Legacy field for backward compatibility
+  selectedAnswer?: string;
 }
 
 export interface CreateAssessmentAnswerRequest {
   assessmentQuestionId: number;
   attemptsId: number;
-  selectedAnswer: string; // A, B, C, D
-  isCorrect: boolean;
+  selectedOptionId: string; // Guid of QuestionOption
 }
 
 export interface UpdateAssessmentAnswerRequest {
   answerId: number;
   assessmentQuestionId: number;
   attemptsId: number;
-  selectedAnswer: string;
-  isCorrect: boolean;
+  selectedOptionId: string; // Guid of QuestionOption
 }
 
 // Assignment Attempt Types
@@ -126,8 +137,8 @@ export interface UpdateAssignmentAttemptRequest {
 }
 
 export interface InviteUserToAssignmentAttemptRequest {
-  attemptsId: number;
-  userId: string;
+  userEmail: string;
+  assignmentAttemptId: number;
 }
 
 // Grading Feedback Types
@@ -140,7 +151,7 @@ export interface GradingFeedbackDto {
   correctPercentage: number;
   wrongPercentage: number;
   grade: string;
-  performance: string;
+  performance: string; // General performance evaluation
   createdAt?: string;
   updatedAt?: string;
 }
@@ -367,6 +378,26 @@ export const updateAssessmentQuestion = async (
 };
 
 /**
+ * Create multiple assessment questions (bulk create)
+ * @param data - Assessment Questions data to create
+ * @returns ObjectResponse with array of created assessment question IDs
+ */
+export const createAssessmentQuestions = async (
+  data: CreateAssessmentQuestionsRequest
+): Promise<ObjectResponse<number[]>> => {
+  try {
+    const response = await BaseRequest.Post<ObjectResponse<number[]>>(
+      '/api/v1/assessmentquestion/bulk',
+      data
+    );
+    return response;
+  } catch (error) {
+    console.error('Create Assessment Questions (Bulk) Error:', error);
+    throw error;
+  }
+};
+
+/**
  * Delete an assessment question
  * @param assessmentQuestionId - Assessment Question ID to delete
  * @returns ObjectResponse with boolean result
@@ -438,10 +469,16 @@ export const getAssessmentAnswersByAttemptId = async (
     const response = await BaseRequest.Get<AssessmentAnswerDto[]>(
       `/api/v1/assessmentanswer/attempt/${attemptId}`
     );
-    return response;
+    // Ensure response is always an array
+    if (Array.isArray(response)) {
+      return response;
+    }
+    // If response is null, undefined, or not an array, return empty array
+    return [];
   } catch (error) {
     console.error('Get Assessment Answers By Attempt ID Error:', error);
-    throw error;
+    // Return empty array instead of throwing error when no answers exist
+    return [];
   }
 };
 
@@ -454,11 +491,16 @@ export const createAssessmentAnswer = async (
   data: CreateAssessmentAnswerRequest
 ): Promise<number> => {
   try {
-    const response = await BaseRequest.Post<number>(
+    // Backend expects ObjectResponse<int>
+    const response = await BaseRequest.Post<ObjectResponse<number>>(
       '/api/v1/assessmentanswer',
-      data
+      {
+        assessmentQuestionId: data.assessmentQuestionId,
+        attemptsId: data.attemptsId,
+        selectedOptionId: data.selectedOptionId
+      }
     );
-    return response;
+    return response.data || response.Data || 0;
   } catch (error) {
     console.error('Create Assessment Answer Error:', error);
     throw error;
@@ -469,18 +511,23 @@ export const createAssessmentAnswer = async (
  * Update an existing assessment answer
  * @param answerId - Answer ID to update
  * @param data - Assessment Answer data to update
- * @returns Boolean result (Note: This endpoint returns direct boolean, not ObjectResponse)
+ * @returns Boolean result (Note: This endpoint returns ObjectResponse<bool>)
  */
 export const updateAssessmentAnswer = async (
   answerId: number,
   data: UpdateAssessmentAnswerRequest
 ): Promise<boolean> => {
   try {
-    const response = await BaseRequest.Put<boolean>(
+    const response = await BaseRequest.Put<ObjectResponse<boolean>>(
       `/api/v1/assessmentanswer/${answerId}`,
-      data
+      {
+        answerId: data.answerId,
+        assessmentQuestionId: data.assessmentQuestionId,
+        attemptsId: data.attemptsId,
+        selectedOptionId: data.selectedOptionId
+      }
     );
-    return response;
+    return response.data || response.Data || false;
   } catch (error) {
     console.error('Update Assessment Answer Error:', error);
     throw error;
@@ -490,16 +537,17 @@ export const updateAssessmentAnswer = async (
 /**
  * Delete an assessment answer
  * @param answerId - Answer ID to delete
- * @returns Boolean result (Note: This endpoint returns direct boolean, not ObjectResponse)
+ * @returns Boolean result (Backend returns ObjectResponse<bool>)
  */
 export const deleteAssessmentAnswer = async (
   answerId: number
 ): Promise<boolean> => {
   try {
-    const response = (await BaseRequest.Delete<boolean>(
+    const response = await BaseRequest.Delete<ObjectResponse<boolean>>(
       `/api/v1/assessmentanswer/${answerId}`
-    )) as boolean;
-    return response;
+    );
+    // Backend returns ObjectResponse<bool>, extract the data
+    return response.data || response.Data || false;
   } catch (error) {
     console.error('Delete Assessment Answer Error:', error);
     throw error;
@@ -549,8 +597,7 @@ export const getAssignmentAttemptById = async (
 
 /**
  * Get assignment attempts by Assessment ID
- * NOTE: This endpoint may not be implemented in the backend controller yet.
- * The handler exists but the route endpoint is missing from AssignmentAttemptController.
+ * NOTE: This endpoint is not available in backend yet. Using getAllAssignmentAttempts and filtering on frontend as temporary workaround.
  * @param assessmentId - Assessment ID
  * @returns ObjectResponse with array of AssignmentAttemptDto
  */
@@ -558,15 +605,28 @@ export const getAssignmentAttemptsByAssessmentId = async (
   assessmentId: number
 ): Promise<ObjectResponse<AssignmentAttemptDto[]>> => {
   try {
-    // Note: Route pattern assumed based on AssessmentQuestionController pattern
-    // Actual route may vary when backend implements this endpoint
-    const response = await BaseRequest.Get<
-      ObjectResponse<AssignmentAttemptDto[]>
-    >(`/api/v1/assignmentattempt/assessment/${assessmentId}`);
-    return response;
+    // Temporary workaround: Get all attempts and filter by assessmentId on frontend
+    // TODO: Replace with proper endpoint when backend adds GET /api/v1/assignmentattempt/assessment/{assessmentId}
+    const allAttemptsResponse = await getAllAssignmentAttempts();
+    const allAttempts = (allAttemptsResponse.data ||
+      []) as AssignmentAttemptDto[];
+    const filteredAttempts = allAttempts.filter(
+      (attempt) => attempt.assessmentId === assessmentId
+    );
+
+    return {
+      errorCode: allAttemptsResponse.errorCode || '200',
+      message: allAttemptsResponse.message || 'Success',
+      data: filteredAttempts
+    };
   } catch (error) {
     console.error('Get Assignment Attempts By Assessment ID Error:', error);
-    throw error;
+    // Return empty array instead of throwing error
+    return {
+      errorCode: '500',
+      message: 'Failed to fetch assignment attempts',
+      data: []
+    };
   }
 };
 

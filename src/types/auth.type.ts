@@ -47,3 +47,54 @@ export interface LoginResponse {
   data: LoginData;
   errorCode: string | null;
 }
+
+// Forget Password Types
+export interface ForgetPasswordRequest {
+  email: string;
+}
+
+export interface ForgetPasswordResponse {
+  success: boolean;
+  message: string;
+  data: boolean;
+  errorCode: string | null;
+}
+
+// Reset Password Types
+export interface ResetPasswordRequest {
+  email: string;
+  otpCode: string;
+  newPassword: string;
+}
+
+export interface ResetPasswordResponse {
+  success: boolean;
+  message: string;
+  data: boolean;
+  errorCode: string | null;
+}
+
+// Change Password Types
+export interface ChangePasswordRequest {
+  oldPassword: string;
+  newPassword: string;
+}
+
+export interface ChangePasswordResponse {
+  success: boolean;
+  message: string;
+  data: boolean;
+  errorCode: string | null;
+}
+
+// Google Login Types
+export interface GoogleLoginRequest {
+  idToken: string;
+}
+
+export interface GoogleLoginResponse {
+  success: boolean;
+  message: string;
+  data: LoginData;
+  errorCode: string | null;
+}

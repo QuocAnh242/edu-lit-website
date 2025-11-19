@@ -64,8 +64,16 @@ export interface UpdateCourseRequest {
 
 /**
  * Get all courses with pagination
+ * NOTE: This endpoint does not exist in the backend.
+ * The backend only has:
+ * - GET /api/v1/courses/{id} - Get course by ID (query service)
+ * - GET /api/v1/courses/by-syllabus/{syllabusId} - Get courses by syllabus ID (query service)
+ *
+ * This function is kept for backward compatibility but will fail.
+ * Use getCoursesBySyllabusId() or aggregate courses from all syllabuses instead.
  * @param request - Pagination and filter parameters
  * @returns ApiResponse with PagedResult of CourseDto
+ * @deprecated This endpoint doesn't exist. Use getCoursesBySyllabusId() instead.
  */
 export const getAllCourses = async (
   request?: GetPaginationCoursesRequest
@@ -99,6 +107,7 @@ export const getAllCourses = async (
 
 /**
  * Get course by ID
+ * Backend: GET /api/v1/courses/{id} (query service - plural "courses")
  * @param courseId - Course ID to fetch (Guid as string)
  * @returns ApiResponse with CourseDto
  */
@@ -107,7 +116,7 @@ export const getCourseById = async (
 ): Promise<ApiResponse<CourseDto>> => {
   try {
     const response = await BaseRequest.Get<ApiResponse<CourseDto>>(
-      `/api/v1/course/${courseId}`
+      `/api/v1/courses/${courseId}`
     );
     return response;
   } catch (error) {
@@ -117,7 +126,29 @@ export const getCourseById = async (
 };
 
 /**
+ * Get courses by Syllabus ID
+ * Backend: GET /api/v1/courses/by-syllabus/{syllabusId} (query service - plural "courses")
+ * @param syllabusId - Syllabus ID to fetch courses for (Guid as string)
+ * @returns ApiResponse with array of CourseDto
+ */
+export const getCoursesBySyllabusId = async (
+  syllabusId: string
+): Promise<ApiResponse<CourseDto[]>> => {
+  try {
+    const response = await BaseRequest.Get<ApiResponse<CourseDto[]>>(
+      `/api/v1/courses/by-syllabus/${syllabusId}`
+    );
+    return response;
+  } catch (error) {
+    console.error('Get Courses By Syllabus ID Error:', error);
+    throw error;
+  }
+};
+
+/**
  * Create a new course
+ * Backend: POST /api/v1/course (write service - singular "course")
+ * Returns: ApiResponse<Guid> - The created course ID
  * @param data - Course data to create
  * @returns ApiResponse with created course ID (Guid as string)
  */
@@ -138,16 +169,18 @@ export const createCourse = async (
 
 /**
  * Update an existing course
+ * Backend: PUT /api/v1/course/{id} (write service - singular "course")
+ * Returns: ApiResponse<object> - Success message (not boolean)
  * @param courseId - Course ID to update (Guid as string)
  * @param data - Course data to update
- * @returns ApiResponse with boolean result
+ * @returns ApiResponse with object (success message)
  */
 export const updateCourse = async (
   courseId: string,
   data: UpdateCourseRequest
-): Promise<ApiResponse<boolean>> => {
+): Promise<ApiResponse<object>> => {
   try {
-    const response = await BaseRequest.Put<ApiResponse<boolean>>(
+    const response = await BaseRequest.Put<ApiResponse<object>>(
       `/api/v1/course/${courseId}`,
       data
     );
@@ -160,16 +193,18 @@ export const updateCourse = async (
 
 /**
  * Delete a course
+ * Backend: DELETE /api/v1/course/{id} (write service - singular "course")
+ * Returns: ApiResponse<object> - Success message (not boolean)
  * @param courseId - Course ID to delete (Guid as string)
- * @returns ApiResponse with boolean result
+ * @returns ApiResponse with object (success message)
  */
 export const deleteCourse = async (
   courseId: string
-): Promise<ApiResponse<boolean>> => {
+): Promise<ApiResponse<object>> => {
   try {
-    const response = (await BaseRequest.Delete<ApiResponse<boolean>>(
+    const response = (await BaseRequest.Delete<ApiResponse<object>>(
       `/api/v1/course/${courseId}`
-    )) as ApiResponse<boolean>;
+    )) as ApiResponse<object>;
     return response;
   } catch (error) {
     console.error('Delete Course Error:', error);

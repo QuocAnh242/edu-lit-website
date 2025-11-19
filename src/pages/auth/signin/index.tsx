@@ -1,37 +1,221 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import UserAuthForm from './components/user-auth-form';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Link } from 'react-router-dom';
 import Bg from '@/assets/bg.jpg';
 import { Separator } from '@/components/ui/separator';
-import { useInitForgotPassword } from '@/queries/auth.query';
+import { Loader2 } from 'lucide-react';
 import ForgotPasswordForm from './components/forgot-password-form';
+import { forgetPassword, googleLogin } from '@/services/auth.api';
+import { useToast } from '@/components/ui/use-toast';
+
+// Declare Google types for TypeScript
+declare global {
+  interface Window {
+    google?: {
+      accounts: {
+        id: {
+          initialize: (config: {
+            client_id: string;
+            callback: (response: { credential: string }) => void;
+          }) => void;
+          prompt: () => void;
+          renderButton: (
+            element: HTMLElement,
+            config: {
+              theme?: string;
+              size?: string;
+              text?: string;
+              shape?: string;
+              logo_alignment?: string;
+              width?: string;
+            }
+          ) => void;
+        };
+      };
+    };
+  }
+}
 
 export default function SignInPage() {
   const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const { toast } = useToast();
+  const googleScriptLoaded = useRef(false);
+  const googleButtonRef = useRef<HTMLDivElement>(null);
 
-  const handleLoginGoogle = () => {
-    const a = document.createElement('a');
-    const url =
-      process.env.NODE_ENV === 'production'
-        ? 'https://api.hoptacxaluavang.site'
-        : 'https://api.hoptacxaluavang.site';
-    a.href = `${url}/api/auth/google-login`;
-    a.target = '_self';
-    a.click();
-  };
+  // Handle Google credential response
+  const handleGoogleCredentialResponse = useCallback(
+    async (response: { credential: string }) => {
+      setIsGoogleLoading(true);
+      try {
+        const loginResponse = await googleLogin({
+          idToken: response.credential
+        });
 
-  const { mutateAsync: initForgotPassword } = useInitForgotPassword();
+        if (loginResponse.success) {
+          toast({
+            title: 'Đăng nhập thành công!',
+            description: `Chào mừng ${loginResponse.data.fullName}`,
+            variant: 'default'
+          });
+
+          setTimeout(() => {
+            window.location.href = '/';
+          }, 1500);
+        } else {
+          toast({
+            title: 'Đăng nhập thất bại',
+            description:
+              loginResponse.message || 'Không thể đăng nhập bằng Google',
+            variant: 'destructive'
+          });
+        }
+      } catch (err: unknown) {
+        console.error('Google login error:', err);
+
+        let errorMessage = 'Không thể đăng nhập bằng Google. Vui lòng thử lại.';
+
+        if (
+          err &&
+          typeof err === 'object' &&
+          'response' in err &&
+          err.response &&
+          typeof err.response === 'object' &&
+          'data' in err.response &&
+          err.response.data &&
+          typeof err.response.data === 'object' &&
+          'message' in err.response.data
+        ) {
+          errorMessage = String(err.response.data.message);
+        } else if (err instanceof Error) {
+          errorMessage = err.message;
+        }
+
+        toast({
+          title: 'Lỗi đăng nhập Google',
+          description: errorMessage,
+          variant: 'destructive'
+        });
+      } finally {
+        setIsGoogleLoading(false);
+      }
+    },
+    [toast]
+  );
+
+  // Initialize Google Sign In
+  const initializeGoogleSignIn = useCallback(() => {
+    if (!window.google || !googleButtonRef.current) return;
+
+    // Get Google Client ID from environment variable or use a default
+    // You should set VITE_GOOGLE_CLIENT_ID in your .env file
+    const clientId =
+      import.meta.env.VITE_GOOGLE_CLIENT_ID || 'YOUR_GOOGLE_CLIENT_ID_HERE';
+
+    if (clientId === 'YOUR_GOOGLE_CLIENT_ID_HERE') {
+      console.warn(
+        'Google Client ID not configured. Please set VITE_GOOGLE_CLIENT_ID in your .env file'
+      );
+      return;
+    }
+
+    window.google.accounts.id.initialize({
+      client_id: clientId,
+      callback: handleGoogleCredentialResponse
+    });
+
+    // Render Google button in the hidden div
+    if (googleButtonRef.current) {
+      try {
+        window.google.accounts.id.renderButton(googleButtonRef.current, {
+          theme: 'outline',
+          size: 'large',
+          text: 'signin_with',
+          width: '100%'
+        });
+      } catch (error) {
+        console.error('Error rendering Google button:', error);
+      }
+    }
+  }, [handleGoogleCredentialResponse]);
+
+  // Load Google Identity Services script
+  useEffect(() => {
+    if (googleScriptLoaded.current) return;
+
+    const script = document.createElement('script');
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.defer = true;
+    script.onload = () => {
+      // Wait a bit for Google to be fully ready
+      setTimeout(() => {
+        googleScriptLoaded.current = true;
+        initializeGoogleSignIn();
+      }, 100);
+    };
+    script.onerror = () => {
+      console.error('Failed to load Google Identity Services script');
+      toast({
+        title: 'Lỗi',
+        description: 'Không thể tải Google Sign In. Vui lòng thử lại sau.',
+        variant: 'destructive'
+      });
+    };
+    document.head.appendChild(script);
+
+    return () => {
+      // Cleanup if needed
+    };
+  }, [initializeGoogleSignIn, toast]);
 
   const handleForgotPassword = async (email: string) => {
-    const [err, data] = await initForgotPassword({ contactInfo: email });
-    console.log('data', data);
-    if (!err && data) {
-      const { resetToken } = data.data;
-      window.location.href = `${window.location.origin}/auth/forgot-password/${resetToken}`;
+    try {
+      const response = await forgetPassword({ email });
+
+      if (response.success) {
+        toast({
+          title: 'Yêu cầu thành công!',
+          description:
+            response.message ||
+            'Nếu email tồn tại, mã OTP đã được gửi đến email của bạn.',
+          variant: 'default'
+        });
+      } else {
+        throw new Error(
+          response.message || 'Yêu cầu thất bại. Vui lòng thử lại.'
+        );
+      }
+    } catch (err: unknown) {
+      let errorMessage = 'Đã xảy ra lỗi. Vui lòng thử lại.';
+
+      if (
+        err &&
+        typeof err === 'object' &&
+        'response' in err &&
+        err.response &&
+        typeof err.response === 'object' &&
+        'data' in err.response &&
+        err.response.data &&
+        typeof err.response.data === 'object' &&
+        'message' in err.response.data
+      ) {
+        errorMessage = String(err.response.data.message);
+      } else if (err instanceof Error) {
+        errorMessage = err.message;
+      }
+
+      toast({
+        title: 'Lỗi yêu cầu',
+        description: errorMessage,
+        variant: 'destructive'
+      });
+
+      throw err;
     }
   };
 
@@ -119,35 +303,19 @@ export default function SignInPage() {
               </div>
 
               {/* Social login */}
-              <Button
-                variant="outline"
-                type="button"
-                className="w-full"
-                onClick={() => {
-                  handleLoginGoogle();
-                }}
-              >
-                <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
-                  <path
-                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                    fill="#4285F4"
-                  />
-                  <path
-                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                    fill="#34A853"
-                  />
-                  <path
-                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                    fill="#FBBC05"
-                  />
-                  <path
-                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                    fill="#EA4335"
-                  />
-                  <path d="M1 1h22v22H1z" fill="none" />
-                </svg>
-                Google
-              </Button>
+              {isGoogleLoading ? (
+                <Button
+                  variant="outline"
+                  type="button"
+                  className="w-full"
+                  disabled
+                >
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Đang xử lý...
+                </Button>
+              ) : (
+                <div ref={googleButtonRef} className="w-full" />
+              )}
 
               {/* Sign up link */}
               <div className="text-center">

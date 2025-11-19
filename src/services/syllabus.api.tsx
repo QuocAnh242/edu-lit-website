@@ -77,37 +77,99 @@ export interface UpdateSyllabusRequest {
 // ============================================================================
 
 /**
- * Get all syllabuses with pagination
- * @param request - Pagination and filter parameters
- * @returns ApiResponse with PagedResult of SyllabusDto
+ * Get all syllabuses
+ * NOTE: The API gateway routes /api/v1/syllabus to the write service which doesn't have a GET endpoint.
+ * The query service has /api/v1/syllabuses but it's not routed through the gateway.
+ * This function tries the query service endpoint first, then falls back gracefully.
+ * @param request - Filter parameters (applied client-side)
+ * @returns ApiResponse with array of SyllabusDto (wrapped in PagedResult for compatibility)
  */
 export const getAllSyllabuses = async (
   request?: GetPaginationSyllabusRequest
 ): Promise<ApiResponse<PagedResult<SyllabusDto>>> => {
   try {
-    const params = new URLSearchParams();
-    if (request?.pageNumber) {
-      params.append('pageNumber', request.pageNumber.toString());
-    }
-    if (request?.pageSize) {
-      params.append('pageSize', request.pageSize.toString());
-    }
-    if (request?.searchTerm) {
-      params.append('searchTerm', request.searchTerm);
-    }
-    if (request?.semester !== undefined && request?.semester !== null) {
-      params.append('semester', request.semester.toString());
-    }
-    if (request?.isActive !== undefined && request?.isActive !== null) {
-      params.append('isActive', request.isActive.toString());
+    // Try query service endpoint first (may not be routed through gateway)
+    let url = `/api/v1/syllabuses`;
+    let response: ApiResponse<SyllabusDto[]>;
+
+    try {
+      response = await BaseRequest.Get<ApiResponse<SyllabusDto[]>>(url);
+    } catch (error: unknown) {
+      // If query service endpoint fails (404), try write service endpoint
+      // But write service doesn't have GET, so return empty result
+      console.warn(
+        'Query service endpoint not available, returning empty result'
+      );
+      return {
+        success: true,
+        message: 'Syllabuses endpoint not available through API gateway',
+        data: {
+          items: [],
+          totalCount: 0,
+          pageNumber: request?.pageNumber || 1,
+          pageSize: request?.pageSize || 100,
+          totalPages: 0,
+          hasPreviousPage: false,
+          hasNextPage: false
+        }
+      };
     }
 
-    const queryString = params.toString();
-    const url = `/api/v1/syllabus${queryString ? `?${queryString}` : ''}`;
+    // Transform the response to match the expected PagedResult format
+    if (response.success && response.data) {
+      let syllabuses = response.data;
 
-    const response =
-      await BaseRequest.Get<ApiResponse<PagedResult<SyllabusDto>>>(url);
-    return response;
+      // Apply client-side filtering if needed
+      if (request?.isActive !== undefined && request?.isActive !== null) {
+        syllabuses = syllabuses.filter((s) => s.isActive === request.isActive);
+      }
+      if (request?.semester !== undefined && request?.semester !== null) {
+        syllabuses = syllabuses.filter((s) => s.semester === request.semester);
+      }
+      if (request?.searchTerm) {
+        const searchLower = request.searchTerm.toLowerCase();
+        syllabuses = syllabuses.filter(
+          (s) =>
+            s.title.toLowerCase().includes(searchLower) ||
+            s.academicYear.toLowerCase().includes(searchLower) ||
+            s.description?.toLowerCase().includes(searchLower)
+        );
+      }
+
+      // Apply pagination client-side
+      const pageNumber = request?.pageNumber || 1;
+      const pageSize = request?.pageSize || 100;
+      const startIndex = (pageNumber - 1) * pageSize;
+      const endIndex = startIndex + pageSize;
+      const paginatedItems = syllabuses.slice(startIndex, endIndex);
+
+      return {
+        ...response,
+        data: {
+          items: paginatedItems,
+          totalCount: syllabuses.length,
+          pageNumber: pageNumber,
+          pageSize: pageSize,
+          totalPages: Math.ceil(syllabuses.length / pageSize),
+          hasPreviousPage: pageNumber > 1,
+          hasNextPage: endIndex < syllabuses.length
+        }
+      };
+    }
+
+    // Return empty result if no data
+    return {
+      ...response,
+      data: {
+        items: [],
+        totalCount: 0,
+        pageNumber: request?.pageNumber || 1,
+        pageSize: request?.pageSize || 100,
+        totalPages: 0,
+        hasPreviousPage: false,
+        hasNextPage: false
+      }
+    };
   } catch (error) {
     console.error('Get All Syllabuses Error:', error);
     throw error;
@@ -124,7 +186,7 @@ export const getSyllabusById = async (
 ): Promise<ApiResponse<SyllabusDto>> => {
   try {
     const response = await BaseRequest.Get<ApiResponse<SyllabusDto>>(
-      `/api/v1/syllabus/${syllabusId}`
+      `/api/v1/syllabuses/${syllabusId}`
     );
     return response;
   } catch (error) {

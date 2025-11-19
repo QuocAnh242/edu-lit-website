@@ -45,7 +45,7 @@ import {
   Search
 } from 'lucide-react';
 import {
-  getAllCourses,
+  getCoursesBySyllabusId,
   createCourse,
   updateCourse,
   deleteCourse,
@@ -167,7 +167,8 @@ const CoursePage = () => {
 
   const syllabuses = (syllabusesData?.data?.items || []) as SyllabusDto[];
 
-  // Fetch courses
+  // Fetch courses by getting all syllabuses first, then getting courses for each
+  // Since courses are nested under syllabuses in MongoDB, we need to aggregate them
   const {
     data: coursesData,
     isLoading: loadingCourses,
@@ -175,13 +176,99 @@ const CoursePage = () => {
   } = useQuery({
     queryKey: ['courses', searchTerm],
     queryFn: async () => {
-      const response = await getAllCourses({
-        pageNumber: 1,
-        pageSize: 100,
-        searchTerm: searchTerm || undefined
-      });
-      return response;
-    }
+      try {
+        // First, get all active syllabuses
+        const syllabusesResponse = await getAllSyllabuses({
+          pageNumber: 1,
+          pageSize: 1000,
+          isActive: true
+        });
+
+        if (
+          !syllabusesResponse.success ||
+          !syllabusesResponse.data ||
+          syllabusesResponse.data.items.length === 0
+        ) {
+          return {
+            success: true,
+            message: 'No syllabuses available',
+            data: {
+              items: [],
+              totalCount: 0,
+              pageNumber: 1,
+              pageSize: 100,
+              totalPages: 0,
+              hasPreviousPage: false,
+              hasNextPage: false
+            }
+          };
+        }
+
+        const allSyllabuses = (syllabusesResponse.data.items ||
+          []) as SyllabusDto[];
+
+        // Then, get courses for each syllabus and aggregate them
+        const allCourses: CourseDto[] = [];
+        for (const syllabus of allSyllabuses) {
+          try {
+            const coursesResponse = await getCoursesBySyllabusId(syllabus.id);
+            if (coursesResponse.success && coursesResponse.data) {
+              allCourses.push(...coursesResponse.data);
+            }
+          } catch (error) {
+            console.warn(
+              `Failed to fetch courses for syllabus ${syllabus.id}:`,
+              error
+            );
+            // Continue with other syllabuses even if one fails
+          }
+        }
+
+        // Apply client-side filtering if searchTerm is provided
+        let filteredCourses = allCourses;
+        if (searchTerm) {
+          const searchLower = searchTerm.toLowerCase();
+          filteredCourses = allCourses.filter(
+            (course) =>
+              course.title.toLowerCase().includes(searchLower) ||
+              course.courseCode.toLowerCase().includes(searchLower) ||
+              (course.description &&
+                course.description.toLowerCase().includes(searchLower))
+          );
+        }
+
+        return {
+          success: true,
+          message: 'Courses fetched successfully',
+          data: {
+            items: filteredCourses,
+            totalCount: filteredCourses.length,
+            pageNumber: 1,
+            pageSize: 100,
+            totalPages: 1,
+            hasPreviousPage: false,
+            hasNextPage: false
+          }
+        };
+      } catch (error: unknown) {
+        console.error('Error fetching courses:', error);
+        return {
+          success: true,
+          message: 'Failed to fetch courses',
+          data: {
+            items: [],
+            totalCount: 0,
+            pageNumber: 1,
+            pageSize: 100,
+            totalPages: 0,
+            hasPreviousPage: false,
+            hasNextPage: false
+          }
+        };
+      }
+    },
+    retry: 1,
+    staleTime: 5 * 60 * 1000 // Cache for 5 minutes
   });
 
   const courses = (coursesData?.data?.items || []) as CourseDto[];
