@@ -52,7 +52,9 @@ import {
   Clock,
   BookOpen,
   ListChecks,
-  X
+  X,
+  PlusCircle,
+  CheckCircle2
 } from 'lucide-react';
 import {
   getAllAssessments,
@@ -72,8 +74,15 @@ import {
 } from '@/services/assessment.api';
 import { getCoursesBySyllabusId, CourseDto } from '@/services/course.api';
 import { getAllSyllabuses, SyllabusDto } from '@/services/syllabus.api';
-import { getAllQuestions } from '@/services/question.api';
-import { QuestionDto } from '@/queries/question.query';
+import {
+  getAllQuestions,
+  getQuestionsByQuestionBankId,
+  getQuestionById,
+  getQuestionOptionsByQuestionId,
+  QuestionOptionDto
+} from '@/services/question.api';
+import { QuestionDto, QuestionBankDto } from '@/queries/question.query';
+import { getAllQuestionBanks } from '@/services/question-bank.api';
 import __helpers from '@/helpers';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -108,12 +117,22 @@ export default function AssessmentPage() {
   const [assessmentDialogOpen, setAssessmentDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [questionsDialogOpen, setQuestionsDialogOpen] = useState(false);
+  const [addQuestionsDialogOpen, setAddQuestionsDialogOpen] = useState(false);
+  const [viewQuestionsDialogOpen, setViewQuestionsDialogOpen] = useState(false);
+  const [assessmentForViewQuestions, setAssessmentForViewQuestions] =
+    useState<AssessmentDto | null>(null);
   const [editingAssessment, setEditingAssessment] =
     useState<AssessmentDto | null>(null);
   const [assessmentToDelete, setAssessmentToDelete] =
     useState<AssessmentDto | null>(null);
   const [assessmentForQuestions, setAssessmentForQuestions] =
     useState<AssessmentDto | null>(null);
+  const [assessmentForAddQuestions, setAssessmentForAddQuestions] =
+    useState<AssessmentDto | null>(null);
+  const [selectedQuestionBankId, setSelectedQuestionBankId] =
+    useState<string>('');
+  const [selectedQuestionIdsFromBank, setSelectedQuestionIdsFromBank] =
+    useState<string[]>([]);
   const [useManualCourseId, setUseManualCourseId] = useState(false);
   const [selectedQuestionIds, setSelectedQuestionIds] = useState<string[]>([]);
   const [editingQuestion, setEditingQuestion] =
@@ -295,6 +314,63 @@ export default function AssessmentPage() {
     (q) => !assessmentQuestions.some((aq) => aq.questionId === q.questionId)
   );
 
+  // Fetch question banks for add questions dialog
+  const { data: questionBanksData, isLoading: loadingQuestionBanks } = useQuery(
+    {
+      queryKey: ['question-banks'],
+      queryFn: async () => {
+        const response = await getAllQuestionBanks();
+        return response;
+      },
+      enabled: addQuestionsDialogOpen
+    }
+  );
+
+  const questionBanks = (questionBanksData?.data || []) as QuestionBankDto[];
+
+  // Fetch questions from selected question bank
+  const { data: questionsFromBankData, isLoading: loadingQuestionsFromBank } =
+    useQuery({
+      queryKey: ['questions-from-bank', selectedQuestionBankId],
+      queryFn: async () => {
+        if (!selectedQuestionBankId) return null;
+        const response = await getQuestionsByQuestionBankId(
+          selectedQuestionBankId
+        );
+        return response;
+      },
+      enabled: addQuestionsDialogOpen && !!selectedQuestionBankId
+    });
+
+  // Fetch current assessment questions for validation when adding questions from bank
+  const { data: currentAssessmentQuestionsData } = useQuery({
+    queryKey: ['assessment-questions', assessmentForAddQuestions?.assessmentId],
+    queryFn: async () => {
+      if (!assessmentForAddQuestions?.assessmentId) return null;
+      const response = await getAssessmentQuestionsByAssessmentId(
+        assessmentForAddQuestions.assessmentId
+      );
+      return response;
+    },
+    enabled: addQuestionsDialogOpen && !!assessmentForAddQuestions?.assessmentId
+  });
+
+  const currentAssessmentQuestions = (currentAssessmentQuestionsData?.data ||
+    currentAssessmentQuestionsData?.Data ||
+    []) as AssessmentQuestionDto[];
+
+  const questionsFromBankRaw = (questionsFromBankData?.data ||
+    []) as QuestionDto[];
+
+  // Filter out questions that are already in the assessment and only show published questions
+  const questionsFromBank = questionsFromBankRaw.filter((q) => {
+    if (!q.isPublished) return false;
+    // Check if question is already in the assessment
+    return !currentAssessmentQuestions.some(
+      (aq) => aq.questionId === q.questionId
+    );
+  });
+
   // Mutations
   const createAssessmentMutation = useMutation({
     mutationFn: async (data: CreateAssessmentRequest) => {
@@ -333,15 +409,57 @@ export default function AssessmentPage() {
       }
     },
     onError: (error: unknown) => {
-      const errorMessage =
-        (error as { response?: { data?: { message?: string } } })?.response
-          ?.data?.message ||
-        (error as { response?: { data?: { Message?: string } } })?.response
-          ?.data?.Message ||
-        (error as { message?: string })?.message ||
-        (error as { Message?: string })?.Message ||
-        'Failed to create assessment';
-      toast.error(errorMessage);
+      console.error('Create Assessment Error Details:', error);
+
+      // Try to extract detailed error information
+      let errorMessage = 'Failed to create assessment';
+
+      // Check for response data message
+      const responseData = (
+        error as {
+          response?: {
+            data?: {
+              message?: string;
+              Message?: string;
+              errorCode?: string;
+              ErrorCode?: string;
+            };
+          };
+        }
+      )?.response?.data;
+      if (responseData) {
+        errorMessage =
+          responseData.message || responseData.Message || errorMessage;
+      }
+
+      // Check for direct message
+      if (!errorMessage || errorMessage === 'Failed to create assessment') {
+        errorMessage =
+          (error as { message?: string })?.message ||
+          (error as { Message?: string })?.Message ||
+          errorMessage;
+      }
+
+      // Check for inner exception or detailed error
+      const innerError = (
+        error as {
+          response?: {
+            data?: { innerException?: string; InnerException?: string };
+          };
+        }
+      )?.response?.data;
+      if (innerError?.innerException || innerError?.InnerException) {
+        errorMessage += `\nDetails: ${innerError.innerException || innerError.InnerException}`;
+      }
+
+      // Log full error for debugging
+      console.error('Full error object:', JSON.stringify(error, null, 2));
+
+      toast.error(`Failed to create assessment: ${errorMessage}`, {
+        duration: 5000,
+        description:
+          'Please check that the course ID exists and try again. You can use "Manual entry" to enter a valid course ID.'
+      });
     }
   });
 
@@ -403,10 +521,11 @@ export default function AssessmentPage() {
       }
       return response;
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       toast.success('Questions added to assessment successfully');
+      // Invalidate queries for the assessment that was updated
       queryClient.invalidateQueries({
-        queryKey: ['assessment-questions', assessmentForQuestions?.assessmentId]
+        queryKey: ['assessment-questions', variables.assessmentId]
       });
       queryClient.invalidateQueries({ queryKey: ['assessments'] });
       setSelectedQuestionIds([]);
@@ -501,12 +620,17 @@ export default function AssessmentPage() {
   };
 
   const handleSaveAssessment = () => {
+    // Validate all required fields
     if (!assessmentForm.title.trim()) {
       toast.error('Title is required');
       return;
     }
     if (!assessmentForm.courseId) {
       toast.error('Please select a course');
+      return;
+    }
+    if (!assessmentForm.creatorId) {
+      toast.error('User not authenticated. Please login again.');
       return;
     }
     if (assessmentForm.totalQuestions <= 0) {
@@ -517,6 +641,8 @@ export default function AssessmentPage() {
       toast.error('Duration must be greater than 0');
       return;
     }
+
+    console.log('Creating assessment with data:', assessmentForm);
 
     if (editingAssessment) {
       updateAssessmentMutation.mutate({
@@ -563,11 +689,80 @@ export default function AssessmentPage() {
     setSelectedQuestionIds([]);
   };
 
+  const handleAddQuestionsFromBank = (assessment: AssessmentDto) => {
+    setAssessmentForAddQuestions(assessment);
+    setSelectedQuestionBankId('');
+    setSelectedQuestionIdsFromBank([]);
+    setAddQuestionsDialogOpen(true);
+  };
+
+  const handleViewQuestions = (assessment: AssessmentDto) => {
+    setAssessmentForViewQuestions(assessment);
+    setViewQuestionsDialogOpen(true);
+  };
+
+  const handleAddQuestionsFromBankSubmit = () => {
+    if (!assessmentForAddQuestions) return;
+
+    if (selectedQuestionIdsFromBank.length === 0) {
+      toast.error('Please select at least one question');
+      return;
+    }
+
+    // Validate total questions limit
+    const currentQuestionCount = currentAssessmentQuestions.length;
+    const questionsToAdd = selectedQuestionIdsFromBank.length;
+    const totalAfterAdd = currentQuestionCount + questionsToAdd;
+    const maxQuestions = assessmentForAddQuestions.totalQuestions;
+
+    if (totalAfterAdd > maxQuestions) {
+      const remaining = maxQuestions - currentQuestionCount;
+      toast.error(
+        `Cannot add ${questionsToAdd} question(s). Assessment can only contain ${maxQuestions} question(s). ` +
+          `Currently has ${currentQuestionCount} question(s). ` +
+          `You can add at most ${remaining} more question(s).`
+      );
+      return;
+    }
+
+    // Bulk add questions
+    createAssessmentQuestionsMutation.mutate(
+      {
+        assessmentId: assessmentForAddQuestions.assessmentId,
+        questionIds: selectedQuestionIdsFromBank
+      },
+      {
+        onSuccess: () => {
+          setAddQuestionsDialogOpen(false);
+          setAssessmentForAddQuestions(null);
+          setSelectedQuestionBankId('');
+          setSelectedQuestionIdsFromBank([]);
+        }
+      }
+    );
+  };
+
   const handleAddQuestion = () => {
     if (!assessmentForQuestions) return;
 
     if (selectedQuestionIds.length === 0) {
       toast.error('Please select at least one question');
+      return;
+    }
+
+    // Validate total questions limit
+    const currentQuestionCount = assessmentQuestions.length;
+    const questionsToAdd = selectedQuestionIds.length;
+    const totalAfterAdd = currentQuestionCount + questionsToAdd;
+    const maxQuestions = assessmentForQuestions.totalQuestions;
+
+    if (totalAfterAdd > maxQuestions) {
+      const remaining = maxQuestions - currentQuestionCount;
+      toast.error(
+        `Cannot add ${questionsToAdd} question(s). Assessment can only contain ${maxQuestions} question(s). ` +
+          `Currently has ${currentQuestionCount} question(s). ` +
+          `You can add at most ${remaining} more question(s).`
+      );
       return;
     }
 
@@ -868,6 +1063,26 @@ export default function AssessmentPage() {
                               <Button
                                 variant="ghost"
                                 size="icon"
+                                onClick={() => handleViewQuestions(assessment)}
+                                className="transition-all duration-200 hover:scale-110 hover:bg-cyan-50"
+                                title="View questions"
+                              >
+                                <ListChecks className="h-4 w-4 text-cyan-600" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() =>
+                                  handleAddQuestionsFromBank(assessment)
+                                }
+                                className="transition-all duration-200 hover:scale-110 hover:bg-purple-50"
+                                title="Add questions from question bank"
+                              >
+                                <PlusCircle className="h-4 w-4 text-purple-600" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
                                 onClick={() => handleEditAssessment(assessment)}
                                 className="transition-all duration-200 hover:scale-110 hover:bg-green-50"
                                 title="Edit assessment"
@@ -1022,17 +1237,23 @@ export default function AssessmentPage() {
                   </div>
                 </div>
                 {useManualCourseId ? (
-                  <Input
-                    id="courseId"
-                    placeholder="Enter course ID (e.g., guid)"
-                    value={assessmentForm.courseId}
-                    onChange={(e) =>
-                      setAssessmentForm({
-                        ...assessmentForm,
-                        courseId: e.target.value
-                      })
-                    }
-                  />
+                  <div className="space-y-2">
+                    <Input
+                      id="courseId"
+                      placeholder="Enter course ID (e.g., guid or course ID from database)"
+                      value={assessmentForm.courseId}
+                      onChange={(e) =>
+                        setAssessmentForm({
+                          ...assessmentForm,
+                          courseId: e.target.value
+                        })
+                      }
+                    />
+                    <p className="text-xs text-amber-600">
+                      ⚠️ Make sure the course ID exists in the database. Invalid
+                      course IDs will cause creation to fail.
+                    </p>
+                  </div>
                 ) : (
                   <>
                     <Select
@@ -1087,17 +1308,24 @@ export default function AssessmentPage() {
                     {coursesError && (
                       <p className="text-xs text-red-500">
                         Unable to load courses. The courses endpoint may not be
-                        available.
+                        available. You can use "Manual entry" to enter a course
+                        ID directly.
                       </p>
                     )}
                     {!loadingCourses &&
                       !coursesError &&
                       courses.length === 0 && (
-                        <p className="text-xs text-gray-500">
-                          No courses available. Courses are managed through
-                          syllabuses. Please create a syllabus and add courses
-                          to it first.
-                        </p>
+                        <div className="space-y-1">
+                          <p className="text-xs text-gray-500">
+                            No courses available. Courses are managed through
+                            syllabuses. Please create a syllabus and add courses
+                            to it first.
+                          </p>
+                          <p className="text-xs font-medium text-amber-600">
+                            💡 Tip: You can use "Manual entry" above to enter a
+                            course ID directly if you know it.
+                          </p>
+                        </div>
                       )}
                   </>
                 )}
@@ -1151,6 +1379,36 @@ export default function AssessmentPage() {
                   />
                 </div>
               </div>
+
+              {/* Validation Summary */}
+              {(!assessmentForm.title.trim() ||
+                !assessmentForm.courseId ||
+                !assessmentForm.creatorId ||
+                assessmentForm.totalQuestions <= 0 ||
+                assessmentForm.durationMinutes <= 0) && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                  <p className="mb-2 text-sm font-medium text-amber-800">
+                    Please complete the following required fields:
+                  </p>
+                  <ul className="ml-4 list-disc space-y-1 text-xs text-amber-700">
+                    {!assessmentForm.title.trim() && (
+                      <li>Enter an assessment title</li>
+                    )}
+                    {!assessmentForm.courseId && (
+                      <li>Select a course (or use manual entry)</li>
+                    )}
+                    {!assessmentForm.creatorId && (
+                      <li>User authentication required</li>
+                    )}
+                    {assessmentForm.totalQuestions <= 0 && (
+                      <li>Set total questions (must be greater than 0)</li>
+                    )}
+                    {assessmentForm.durationMinutes <= 0 && (
+                      <li>Set duration in minutes (must be greater than 0)</li>
+                    )}
+                  </ul>
+                </div>
+              )}
             </div>
             <DialogFooter>
               <Button
@@ -1174,10 +1432,24 @@ export default function AssessmentPage() {
                   updateAssessmentMutation.isPending ||
                   !assessmentForm.title.trim() ||
                   !assessmentForm.courseId ||
+                  !assessmentForm.creatorId ||
                   assessmentForm.totalQuestions <= 0 ||
                   assessmentForm.durationMinutes <= 0
                 }
                 className="bg-gradient-to-r from-cyan-600 to-blue-600"
+                title={
+                  !assessmentForm.title.trim()
+                    ? 'Please enter a title'
+                    : !assessmentForm.courseId
+                      ? 'Please select a course'
+                      : !assessmentForm.creatorId
+                        ? 'User not authenticated'
+                        : assessmentForm.totalQuestions <= 0
+                          ? 'Total questions must be greater than 0'
+                          : assessmentForm.durationMinutes <= 0
+                            ? 'Duration must be greater than 0'
+                            : ''
+                }
               >
                 {(createAssessmentMutation.isPending ||
                   updateAssessmentMutation.isPending) && (
@@ -1264,6 +1536,35 @@ export default function AssessmentPage() {
                   <CardTitle className="text-lg">
                     {editingQuestion ? 'Edit Question' : 'Add Question(s)'}
                   </CardTitle>
+                  {assessmentForQuestions && !editingQuestion && (
+                    <div className="mt-2 text-sm text-gray-600">
+                      <span className="font-medium">
+                        Question limit: {assessmentQuestions.length} /{' '}
+                        {assessmentForQuestions.totalQuestions}
+                      </span>
+                      {assessmentQuestions.length + selectedQuestionIds.length >
+                        assessmentForQuestions.totalQuestions && (
+                        <span className="ml-2 font-medium text-red-600">
+                          (Exceeds limit by{' '}
+                          {assessmentQuestions.length +
+                            selectedQuestionIds.length -
+                            assessmentForQuestions.totalQuestions}
+                          )
+                        </span>
+                      )}
+                      {assessmentQuestions.length +
+                        selectedQuestionIds.length <=
+                        assessmentForQuestions.totalQuestions && (
+                        <span className="ml-2 text-green-600">
+                          (
+                          {assessmentForQuestions.totalQuestions -
+                            assessmentQuestions.length -
+                            selectedQuestionIds.length}{' '}
+                          remaining)
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {editingQuestion ? (
@@ -1443,7 +1744,11 @@ export default function AssessmentPage() {
                         onClick={handleAddQuestion}
                         disabled={
                           selectedQuestionIds.length === 0 ||
-                          createAssessmentQuestionsMutation.isPending
+                          createAssessmentQuestionsMutation.isPending ||
+                          (!!assessmentForQuestions &&
+                            assessmentQuestions.length +
+                              selectedQuestionIds.length >
+                              assessmentForQuestions.totalQuestions)
                         }
                         className="w-full"
                       >
@@ -1566,7 +1871,591 @@ export default function AssessmentPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* Add Questions from Question Bank Dialog */}
+        <Dialog
+          open={addQuestionsDialogOpen}
+          onOpenChange={(open) => {
+            setAddQuestionsDialogOpen(open);
+            if (!open) {
+              setAssessmentForAddQuestions(null);
+              setSelectedQuestionBankId('');
+              setSelectedQuestionIdsFromBank([]);
+            }
+          }}
+        >
+          <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <PlusCircle className="h-5 w-5" />
+                Add Questions from Question Bank -{' '}
+                {assessmentForAddQuestions?.title}
+              </DialogTitle>
+              <DialogDescription>
+                Select a question bank and choose questions to add to this
+                assessment
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-6 py-4">
+              {/* Step 1: Select Question Bank */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">
+                    Step 1: Select Question Bank
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="questionBank">Question Bank *</Label>
+                    <Select
+                      value={selectedQuestionBankId}
+                      onValueChange={(value) => {
+                        setSelectedQuestionBankId(value);
+                        setSelectedQuestionIdsFromBank([]); // Reset selected questions when bank changes
+                      }}
+                      disabled={loadingQuestionBanks}
+                    >
+                      <SelectTrigger id="questionBank">
+                        <SelectValue
+                          placeholder={
+                            loadingQuestionBanks
+                              ? 'Loading question banks...'
+                              : questionBanks.length === 0
+                                ? 'No question banks available'
+                                : 'Select a question bank'
+                          }
+                        />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {loadingQuestionBanks ? (
+                          <div className="flex items-center justify-center p-4">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <span className="ml-2 text-sm">
+                              Loading question banks...
+                            </span>
+                          </div>
+                        ) : questionBanks.length === 0 ? (
+                          <div className="p-4 text-center text-sm text-gray-500">
+                            No question banks available
+                          </div>
+                        ) : (
+                          questionBanks.map((bank) => (
+                            <SelectItem
+                              key={bank.questionBanksId}
+                              value={bank.questionBanksId}
+                            >
+                              {bank.title}
+                              {bank.subject && ` (${bank.subject})`}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Step 2: Select Questions */}
+              {selectedQuestionBankId && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">
+                      Step 2: Select Questions (
+                      {selectedQuestionIdsFromBank.length} selected)
+                    </CardTitle>
+                    {assessmentForAddQuestions && (
+                      <div className="mt-2 text-sm text-gray-600">
+                        <span className="font-medium">
+                          Question limit: {currentAssessmentQuestions.length} /{' '}
+                          {assessmentForAddQuestions.totalQuestions}
+                        </span>
+                        {(() => {
+                          const remaining =
+                            assessmentForAddQuestions.totalQuestions -
+                            currentAssessmentQuestions.length;
+                          const willExceed =
+                            selectedQuestionIdsFromBank.length > remaining;
+                          if (willExceed) {
+                            return (
+                              <span className="ml-2 font-medium text-red-600">
+                                (Exceeds limit by{' '}
+                                {selectedQuestionIdsFromBank.length - remaining}
+                                . You can only add {remaining} more question
+                                {remaining !== 1 ? 's' : ''})
+                              </span>
+                            );
+                          }
+                          return (
+                            <span className="ml-2 text-green-600">
+                              ({remaining - selectedQuestionIdsFromBank.length}{' '}
+                              remaining after adding{' '}
+                              {selectedQuestionIdsFromBank.length})
+                            </span>
+                          );
+                        })()}
+                      </div>
+                    )}
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {loadingQuestionsFromBank ? (
+                      <div className="space-y-2">
+                        {[1, 2, 3].map((i) => (
+                          <Skeleton key={i} className="h-16 w-full" />
+                        ))}
+                      </div>
+                    ) : questionsFromBank.length === 0 ? (
+                      <div className="py-8 text-center text-gray-500">
+                        <BookOpen className="mx-auto mb-2 h-12 w-12 text-gray-300" />
+                        <p>No questions available in this question bank</p>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="max-h-96 space-y-2 overflow-y-auto rounded-md border p-2">
+                          {questionsFromBank.length === 0 ? (
+                            <div className="py-8 text-center text-sm text-gray-500">
+                              <BookOpen className="mx-auto mb-2 h-12 w-12 text-gray-300" />
+                              <p>
+                                No available questions to add. All questions
+                                from this bank are already in the assessment or
+                                not published.
+                              </p>
+                            </div>
+                          ) : (
+                            questionsFromBank.map((question) => (
+                              <div
+                                key={question.questionId}
+                                className="flex items-start gap-2 rounded p-2 hover:bg-gray-50"
+                              >
+                                <input
+                                  type="checkbox"
+                                  id={`bank-question-${question.questionId}`}
+                                  checked={selectedQuestionIdsFromBank.includes(
+                                    question.questionId
+                                  )}
+                                  disabled={
+                                    !selectedQuestionIdsFromBank.includes(
+                                      question.questionId
+                                    ) &&
+                                    !!assessmentForAddQuestions &&
+                                    currentAssessmentQuestions.length +
+                                      selectedQuestionIdsFromBank.length >=
+                                      assessmentForAddQuestions.totalQuestions
+                                  }
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      // Check if adding this question would exceed the limit
+                                      if (assessmentForAddQuestions) {
+                                        const remaining =
+                                          assessmentForAddQuestions.totalQuestions -
+                                          currentAssessmentQuestions.length;
+                                        if (
+                                          selectedQuestionIdsFromBank.length >=
+                                          remaining
+                                        ) {
+                                          toast.error(
+                                            `Cannot select more questions. You can only add ${remaining} more question${remaining !== 1 ? 's' : ''} to this assessment.`
+                                          );
+                                          return;
+                                        }
+                                      }
+                                      setSelectedQuestionIdsFromBank([
+                                        ...selectedQuestionIdsFromBank,
+                                        question.questionId
+                                      ]);
+                                    } else {
+                                      setSelectedQuestionIdsFromBank(
+                                        selectedQuestionIdsFromBank.filter(
+                                          (id) => id !== question.questionId
+                                        )
+                                      );
+                                    }
+                                  }}
+                                  className="mt-1 h-4 w-4 disabled:cursor-not-allowed disabled:opacity-50"
+                                />
+                                <label
+                                  htmlFor={`bank-question-${question.questionId}`}
+                                  className="flex-1 cursor-pointer"
+                                >
+                                  <div className="text-sm font-medium">
+                                    {question.title}
+                                  </div>
+                                  <div className="line-clamp-2 text-xs text-gray-500">
+                                    {question.body}
+                                  </div>
+                                </label>
+                              </div>
+                            ))
+                          )}
+                        </div>
+
+                        {selectedQuestionIdsFromBank.length > 0 && (
+                          <div className="space-y-2">
+                            <Label>
+                              Selected Questions (
+                              {selectedQuestionIdsFromBank.length})
+                            </Label>
+                            <div className="flex flex-wrap gap-2">
+                              {selectedQuestionIdsFromBank.map((id) => {
+                                const question = questionsFromBank.find(
+                                  (q) => q.questionId === id
+                                );
+                                return (
+                                  <Badge
+                                    key={id}
+                                    variant="secondary"
+                                    className="flex items-center gap-1"
+                                  >
+                                    {question?.title || id}
+                                    <X
+                                      className="h-3 w-3 cursor-pointer"
+                                      onClick={() =>
+                                        setSelectedQuestionIdsFromBank(
+                                          selectedQuestionIdsFromBank.filter(
+                                            (qId) => qId !== id
+                                          )
+                                        )
+                                      }
+                                    />
+                                  </Badge>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setAddQuestionsDialogOpen(false);
+                  setAssessmentForAddQuestions(null);
+                  setSelectedQuestionBankId('');
+                  setSelectedQuestionIdsFromBank([]);
+                }}
+                disabled={createAssessmentQuestionsMutation.isPending}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleAddQuestionsFromBankSubmit}
+                disabled={
+                  !selectedQuestionBankId ||
+                  selectedQuestionIdsFromBank.length === 0 ||
+                  createAssessmentQuestionsMutation.isPending ||
+                  (!!assessmentForAddQuestions &&
+                    currentAssessmentQuestions.length +
+                      selectedQuestionIdsFromBank.length >
+                      assessmentForAddQuestions.totalQuestions)
+                }
+                className="bg-gradient-to-r from-purple-600 to-indigo-600"
+              >
+                {createAssessmentQuestionsMutation.isPending && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
+                Add{' '}
+                {selectedQuestionIdsFromBank.length > 0
+                  ? `${selectedQuestionIdsFromBank.length} `
+                  : ''}
+                Question{selectedQuestionIdsFromBank.length !== 1 ? 's' : ''}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* View Questions Dialog */}
+        <Dialog
+          open={viewQuestionsDialogOpen}
+          onOpenChange={(open) => {
+            setViewQuestionsDialogOpen(open);
+            if (!open) {
+              setAssessmentForViewQuestions(null);
+            }
+          }}
+        >
+          <DialogContent className="max-h-[90vh] max-w-5xl overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <ListChecks className="h-5 w-5" />
+                View Questions - {assessmentForViewQuestions?.title}
+              </DialogTitle>
+              <DialogDescription>
+                View all questions, options, and correct answers in this
+                assessment
+              </DialogDescription>
+            </DialogHeader>
+
+            <ViewQuestionsContent
+              assessmentId={assessmentForViewQuestions?.assessmentId}
+            />
+          </DialogContent>
+        </Dialog>
       </div>
     </>
+  );
+}
+
+// Component to display all questions with details
+function ViewQuestionsContent({ assessmentId }: { assessmentId?: number }) {
+  // Fetch assessment questions
+  const {
+    data: assessmentQuestionsData,
+    isLoading: loadingAssessmentQuestions
+  } = useQuery({
+    queryKey: ['assessment-questions-view', assessmentId],
+    queryFn: async () => {
+      if (!assessmentId) return null;
+      const response = await getAssessmentQuestionsByAssessmentId(assessmentId);
+      return response;
+    },
+    enabled: !!assessmentId
+  });
+
+  const assessmentQuestions = (assessmentQuestionsData?.data ||
+    assessmentQuestionsData?.Data ||
+    []) as AssessmentQuestionDto[];
+
+  if (loadingAssessmentQuestions) {
+    return (
+      <div className="space-y-4 py-4">
+        {[1, 2, 3].map((i) => (
+          <Skeleton key={i} className="h-48 w-full" />
+        ))}
+      </div>
+    );
+  }
+
+  if (!assessmentQuestions || assessmentQuestions.length === 0) {
+    return (
+      <div className="py-8 text-center text-gray-500">
+        <BookOpen className="mx-auto mb-2 h-12 w-12 text-gray-300" />
+        <p>No questions added to this assessment yet.</p>
+      </div>
+    );
+  }
+
+  // Sort by order number
+  const sortedQuestions = [...assessmentQuestions].sort(
+    (a, b) => a.orderNum - b.orderNum
+  );
+
+  return (
+    <div className="space-y-6 py-4">
+      {sortedQuestions.map((assessmentQuestion) => (
+        <QuestionDetailCard
+          key={assessmentQuestion.assessmentQuestionId}
+          assessmentQuestion={assessmentQuestion}
+        />
+      ))}
+    </div>
+  );
+}
+
+// Component to display individual question with details
+function QuestionDetailCard({
+  assessmentQuestion
+}: {
+  assessmentQuestion: AssessmentQuestionDto;
+}) {
+  const [question, setQuestion] = useState<QuestionDto | null>(null);
+  const [options, setOptions] = useState<QuestionOptionDto[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  React.useEffect(() => {
+    const fetchQuestionData = async () => {
+      if (!assessmentQuestion.questionId) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        // Fetch question details
+        const questionResponse = await getQuestionById(
+          assessmentQuestion.questionId
+        );
+        const questionData = questionResponse.data as QuestionDto;
+        setQuestion(questionData);
+
+        // Fetch question options
+        const optionsResponse = await getQuestionOptionsByQuestionId(
+          assessmentQuestion.questionId
+        );
+        const optionsData = (optionsResponse.data || []) as QuestionOptionDto[];
+        setOptions(optionsData);
+      } catch (error) {
+        console.error('Error fetching question:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchQuestionData();
+  }, [assessmentQuestion.questionId]);
+
+  if (loading) {
+    return (
+      <Card>
+        <CardContent className="pt-6">
+          <Skeleton className="h-32 w-full" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!question) {
+    return (
+      <Card>
+        <CardContent className="pt-6">
+          <p className="text-sm text-gray-500">
+            Question not found (ID: {assessmentQuestion.questionId})
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // For multiple choice questions, find all correct options based on IsCorrect property
+  const sortedOptions = options.sort((a, b) => a.orderIdx - b.orderIdx);
+  const correctOptions = sortedOptions.filter((opt) => opt.isCorrect);
+  const correctAnswerLetters = sortedOptions
+    .map((opt, idx) => ({ opt, letter: String.fromCharCode(65 + idx) }))
+    .filter(({ opt }) => opt.isCorrect)
+    .map(({ letter }) => letter);
+
+  return (
+    <Card className="border-cyan-200">
+      <CardContent className="pt-6">
+        <div className="space-y-4">
+          {/* Question Header */}
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <div className="mb-2 flex flex-wrap items-center gap-2">
+                <Badge variant="outline">
+                  Question {assessmentQuestion.orderNum}
+                </Badge>
+                {question.questionType === 1 && (
+                  <Badge variant="secondary">📝 Paragraph</Badge>
+                )}
+                {question.questionType === 2 && (
+                  <Badge variant="default">☑️ Multiple Choice</Badge>
+                )}
+                {question.questionType === 2 &&
+                  correctAnswerLetters.length > 0 && (
+                    <Badge className="bg-green-600">
+                      Correct Answer{correctAnswerLetters.length > 1 ? 's' : ''}
+                      : {correctAnswerLetters.join(', ')}
+                    </Badge>
+                  )}
+                {question.questionType === 1 &&
+                  assessmentQuestion.correctAnswer && (
+                    <Badge className="bg-green-600">
+                      Reference Answer Available
+                    </Badge>
+                  )}
+              </div>
+            </div>
+          </div>
+
+          {/* Question Title and Body */}
+          <div>
+            <h4 className="mb-2 text-lg font-semibold">{question.title}</h4>
+            <div
+              className="prose max-w-none text-sm text-gray-700"
+              dangerouslySetInnerHTML={{ __html: question.body }}
+            />
+          </div>
+
+          {/* Multiple Choice Options */}
+          {question.questionType === 2 && sortedOptions.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-gray-700">Options:</p>
+              <div className="space-y-2">
+                {sortedOptions.map((option, idx) => {
+                  const letter = String.fromCharCode(65 + idx); // A, B, C, D
+                  const isCorrect = option.isCorrect;
+
+                  return (
+                    <div
+                      key={option.questionOptionId}
+                      className={`flex items-start gap-3 rounded-lg border p-3 ${
+                        isCorrect
+                          ? 'border-green-300 bg-green-100'
+                          : 'border-gray-200 bg-gray-50'
+                      }`}
+                    >
+                      <div
+                        className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-sm font-medium ${
+                          isCorrect
+                            ? 'bg-green-600 text-white'
+                            : 'bg-gray-200 text-gray-700'
+                        }`}
+                      >
+                        {letter}
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm">{option.optionText}</p>
+                      </div>
+                      {isCorrect && (
+                        <Badge variant="default" className="bg-green-600">
+                          <CheckCircle2 className="mr-1 h-3 w-3" />
+                          Correct Answer
+                        </Badge>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              {correctOptions.length === 0 && (
+                <p className="mt-2 text-xs text-amber-600">
+                  ⚠️ No correct answers marked in the question options.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Paragraph Answer Display */}
+          {question.questionType === 1 && (
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-gray-700">
+                Expected Answer:
+              </p>
+              <div className="rounded-lg border border-green-200 bg-green-50 p-4">
+                <p className="whitespace-pre-wrap text-sm text-gray-700">
+                  {assessmentQuestion.correctAnswer ||
+                    'No reference answer provided'}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Question Metadata */}
+          {(question.tags || question.metadata) && (
+            <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-3">
+              <div className="space-y-1 text-xs text-gray-600">
+                {question.tags && (
+                  <div>
+                    <span className="font-medium">Tags: </span>
+                    {question.tags}
+                  </div>
+                )}
+                {question.metadata && (
+                  <div>
+                    <span className="font-medium">Metadata: </span>
+                    {question.metadata}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   );
 }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import Navbar from '@/components/shared/navbar';
@@ -73,10 +73,12 @@ import { Skeleton } from '@/components/ui/skeleton';
 export default function QuestionsPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
 
-  // Question Bank state
-  const [selectedQuestionBankId, setSelectedQuestionBankId] =
-    useState<string>('');
+  // Question Bank state - get from URL params or use empty string
+  const [selectedQuestionBankId, setSelectedQuestionBankId] = useState<string>(
+    searchParams.get('questionBankId') || ''
+  );
   const [questionBankDialogOpen, setQuestionBankDialogOpen] = useState(false);
   const [questionBankDeleteDialogOpen, setQuestionBankDeleteDialogOpen] =
     useState(false);
@@ -112,13 +114,38 @@ export default function QuestionsPage() {
 
   const questionBanks = (questionBanksData?.data || []) as QuestionBankDto[];
 
-  // Set first question bank as selected when loaded
+  // Update URL params when selectedQuestionBankId changes
   useEffect(() => {
-    if (questionBanks.length > 0 && !selectedQuestionBankId) {
-      setSelectedQuestionBankId(questionBanks[0].questionBanksId);
+    if (selectedQuestionBankId) {
+      setSearchParams(
+        { questionBankId: selectedQuestionBankId },
+        { replace: true }
+      );
+    }
+  }, [selectedQuestionBankId, setSearchParams]);
+
+  // Set first question bank as selected when loaded (if no questionBankId in URL)
+  useEffect(() => {
+    const urlQuestionBankId = searchParams.get('questionBankId');
+    if (questionBanks.length > 0) {
+      if (urlQuestionBankId) {
+        // Check if the question bank from URL exists
+        const bankExists = questionBanks.some(
+          (bank) => bank.questionBanksId === urlQuestionBankId
+        );
+        if (bankExists && selectedQuestionBankId !== urlQuestionBankId) {
+          setSelectedQuestionBankId(urlQuestionBankId);
+        } else if (!bankExists) {
+          // If URL param doesn't match any bank, use first bank
+          setSelectedQuestionBankId(questionBanks[0].questionBanksId);
+        }
+      } else if (!selectedQuestionBankId) {
+        // No URL param and no selected bank, use first bank
+        setSelectedQuestionBankId(questionBanks[0].questionBanksId);
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [questionBanks.length, selectedQuestionBankId]);
+  }, [questionBanks.length, searchParams]);
 
   // Fetch questions by selected question bank
   const {
@@ -137,10 +164,36 @@ export default function QuestionsPage() {
       );
       return response;
     },
-    enabled: !!selectedQuestionBankId
+    enabled: !!selectedQuestionBankId,
+    staleTime: 0, // Always refetch when component mounts or questionBankId changes
+    refetchOnMount: 'always', // Always refetch when component mounts (e.g., when navigating back)
+    refetchOnWindowFocus: true
   });
 
-  const questions = (questionsData?.data || []) as QuestionDto[];
+  // Extract questions from response
+  // Handle both the ApiResponse structure and direct array responses
+  let questions: QuestionDto[] = [];
+
+  if (questionsData) {
+    // Check if it's an ApiResponse with data property
+    if ('data' in questionsData && Array.isArray(questionsData.data)) {
+      questions = questionsData.data as QuestionDto[];
+    }
+    // Check if it's already an array (direct response)
+    else if (Array.isArray(questionsData)) {
+      questions = questionsData as QuestionDto[];
+    }
+    // Check for PascalCase Data property (in case backend returns it)
+    else if ('Data' in questionsData) {
+      const dataWithPascalCase = questionsData as { Data?: QuestionDto[] };
+      if (Array.isArray(dataWithPascalCase.Data)) {
+        questions = dataWithPascalCase.Data;
+      }
+    }
+  }
+
+  // Filter out any null/undefined values
+  questions = questions.filter((q) => q !== null && q !== undefined);
 
   // Question Bank mutations
   const createQuestionBankMutation = useMutation({
@@ -316,6 +369,7 @@ export default function QuestionsPage() {
       toast.error('Please select a question bank first');
       return;
     }
+    // Navigate to create page with questionBankId, and preserve it in the return URL
     navigate(`/questions/create?questionBankId=${selectedQuestionBankId}`);
   };
 
@@ -569,6 +623,10 @@ export default function QuestionsPage() {
                         ? questionsErrorData.message
                         : 'An error occurred while loading questions'}
                     </p>
+                    <div className="mb-4 text-xs text-gray-400">
+                      Debug: Response data ={' '}
+                      {JSON.stringify(questionsData, null, 2)}
+                    </div>
                     <Button
                       onClick={() =>
                         queryClient.invalidateQueries({
