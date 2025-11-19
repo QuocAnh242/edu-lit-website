@@ -19,6 +19,18 @@ const QuestionsPage = lazy(() => import('@/pages/QuestionsPage'));
 const ViewQuestionPage = lazy(() => import('@/pages/ViewQuestionPage'));
 const EditQuestionPage = lazy(() => import('@/pages/EditQuestionPage'));
 const AssessmentPage = lazy(() => import('@/pages/AssessmentPage'));
+const TeacherAssessmentSubmissionsPage = lazy(
+  () => import('@/pages/TeacherAssessmentSubmissionsPage')
+);
+const StudentAssessmentsPage = lazy(
+  () => import('@/pages/StudentAssessmentsPage')
+);
+const StudentTakeAssessmentPage = lazy(
+  () => import('@/pages/StudentTakeAssessmentPage')
+);
+const StudentAssessmentResultsPage = lazy(
+  () => import('@/pages/StudentAssessmentResultsPage')
+);
 const CreateLessonPage = lazy(
   () => import('@/pages/SyllabusPage/CreateLessonPage')
 );
@@ -120,6 +132,38 @@ export default function AppRouter() {
           element: (
             <Suspense fallback={<div>Loading...</div>}>
               <AssessmentPage />
+            </Suspense>
+          )
+        },
+        {
+          path: '/assessments/:assessmentId/submissions',
+          element: (
+            <Suspense fallback={<div>Loading...</div>}>
+              <TeacherAssessmentSubmissionsPage />
+            </Suspense>
+          )
+        },
+        {
+          path: '/assessments/student',
+          element: (
+            <Suspense fallback={<div>Loading...</div>}>
+              <StudentAssessmentsPage />
+            </Suspense>
+          )
+        },
+        {
+          path: '/assessments/:assessmentId/take',
+          element: (
+            <Suspense fallback={<div>Loading...</div>}>
+              <StudentTakeAssessmentPage />
+            </Suspense>
+          )
+        },
+        {
+          path: '/assessments/:assessmentId/results',
+          element: (
+            <Suspense fallback={<div>Loading...</div>}>
+              <StudentAssessmentResultsPage />
             </Suspense>
           )
         },

@@ -65,7 +65,7 @@ import {
   UpdateSyllabusRequest,
   Semester
 } from '@/services/syllabus.api';
-import { getAllCourses, CourseDto } from '@/services/course.api';
+import { getCoursesBySyllabusId, CourseDto } from '@/services/course.api';
 
 // Extended type for UI display (combining Syllabus with Courses)
 interface SyllabusWithCourses extends SyllabusDto {
@@ -137,20 +137,76 @@ export default function LessonPage() {
   const syllabuses = (syllabusesData?.data?.items || []) as SyllabusDto[];
 
   // Fetch courses for each syllabus (to show course count)
-  // Note: This is a simplified approach. In production, you might want to optimize this
+  // Fetch courses by getting all syllabuses first, then getting courses for each
+  // Since courses are nested under syllabuses in MongoDB, we need to aggregate them
   const { data: coursesData } = useQuery({
     queryKey: ['courses'],
     queryFn: async () => {
       try {
-        const response = await getAllCourses({
+        // First, get all active syllabuses
+        const syllabusesResponse = await getAllSyllabuses({
           pageNumber: 1,
-          pageSize: 1000
+          pageSize: 1000,
+          isActive: true
         });
-        return response;
-      } catch (error) {
+
+        if (
+          !syllabusesResponse.success ||
+          !syllabusesResponse.data ||
+          syllabusesResponse.data.items.length === 0
+        ) {
+          return {
+            success: true,
+            message: 'No syllabuses available',
+            data: {
+              items: [],
+              totalCount: 0,
+              pageNumber: 1,
+              pageSize: 1000,
+              totalPages: 0,
+              hasPreviousPage: false,
+              hasNextPage: false
+            }
+          };
+        }
+
+        const allSyllabuses = (syllabusesResponse.data.items ||
+          []) as SyllabusDto[];
+
+        // Then, get courses for each syllabus and aggregate them
+        const allCourses: CourseDto[] = [];
+        for (const syllabus of allSyllabuses) {
+          try {
+            const coursesResponse = await getCoursesBySyllabusId(syllabus.id);
+            if (coursesResponse.success && coursesResponse.data) {
+              allCourses.push(...coursesResponse.data);
+            }
+          } catch (error) {
+            console.warn(
+              `Failed to fetch courses for syllabus ${syllabus.id}:`,
+              error
+            );
+            // Continue with other syllabuses even if one fails
+          }
+        }
+
+        return {
+          success: true,
+          message: 'Courses fetched successfully',
+          data: {
+            items: allCourses,
+            totalCount: allCourses.length,
+            pageNumber: 1,
+            pageSize: 1000,
+            totalPages: 1,
+            hasPreviousPage: false,
+            hasNextPage: false
+          }
+        };
+      } catch (error: unknown) {
         console.error('Error fetching courses:', error);
         return {
-          success: false,
+          success: true,
           message: 'Failed to fetch courses',
           data: {
             items: [],
@@ -164,7 +220,9 @@ export default function LessonPage() {
         };
       }
     },
-    enabled: syllabuses.length > 0
+    enabled: syllabuses.length > 0,
+    retry: 1,
+    staleTime: 5 * 60 * 1000 // Cache for 5 minutes
   });
 
   const allCourses = (coursesData?.data?.items || []) as CourseDto[];
@@ -193,10 +251,12 @@ export default function LessonPage() {
     },
     onError: (error: unknown) => {
       // Extract error message from API response
+      // Axios interceptor already extracts error.response.data, so error is the API response object
       const apiError = error as {
         message?: string;
         errors?: string[];
         errorCode?: string | number;
+        success?: boolean;
       };
 
       let errorMessage = apiError?.message || 'Failed to create syllabus';
@@ -416,11 +476,24 @@ export default function LessonPage() {
 
     // Prepare data for API
     // Note: Description is validated above, so for creation it will always have a value
+    // Ensure description is never empty for creation - backend requires it
+    const description = syllabusForm.description?.trim() || '';
+
+    // Double-check: if creating and description is empty, validation should have caught this
+    // But add safety check here too
+    if (!editingSyllabus && !description) {
+      toast.error('Description is required');
+      setFormErrors({ description: 'Description is required' });
+      return;
+    }
+
     const dataToSend: CreateSyllabusRequest = {
       title: syllabusForm.title.trim(),
       academicYear: syllabusForm.academicYear.trim(),
       semester: syllabusForm.semester,
-      description: syllabusForm.description?.trim() || ''
+      // For creation, description is required and validated above
+      // For update, description is optional
+      description: editingSyllabus ? description || undefined : description // Must have value for creation
     };
 
     // For creation, check if a syllabus with the same AcademicYear + Semester already exists

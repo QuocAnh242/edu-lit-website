@@ -7,6 +7,7 @@ const Navbar = () => {
   const navigate = useNavigate();
   const [user, setUser] = useState<any>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userRole, setUserRole] = useState<string>('');
 
   useEffect(() => {
     // Check if user is logged in
@@ -18,9 +19,14 @@ const Navbar = () => {
         const userData = JSON.parse(userStr);
         setUser(userData);
         setIsLoggedIn(true);
+        // Get user role from token
+        const role = helpers.getUserRole();
+        setUserRole(role);
       } catch (error) {
         console.error('Error parsing user data:', error);
       }
+    } else {
+      setUserRole('');
     }
   }, []);
 
@@ -33,6 +39,7 @@ const Navbar = () => {
     // Reset state
     setUser(null);
     setIsLoggedIn(false);
+    setUserRole('');
 
     // Redirect to signin
     navigate('/signin');
@@ -119,19 +126,37 @@ const Navbar = () => {
             Questions
           </NavLink>
 
-          <NavLink
-            to="/assessments"
-            className={({ isActive }) =>
-              `rounded-md px-3 py-2 text-xl font-medium text-gray-700 transition-colors duration-200 hover:text-cyan-600 ${
-                isActive
-                  ? 'text-cyan-700 underline decoration-cyan-600 decoration-2 underline-offset-8'
-                  : ''
-              }`
-            }
-            style={{ fontFamily: 'LatoBlack, sans-serif' }}
-          >
-            Assessments
-          </NavLink>
+          {/* Assessment link - different for TEACHER and STUDENT */}
+          {userRole === 'TEACHER' && (
+            <NavLink
+              to="/assessments"
+              className={({ isActive }) =>
+                `rounded-md px-3 py-2 text-xl font-medium text-gray-700 transition-colors duration-200 hover:text-cyan-600 ${
+                  isActive
+                    ? 'text-cyan-700 underline decoration-cyan-600 decoration-2 underline-offset-8'
+                    : ''
+                }`
+              }
+              style={{ fontFamily: 'LatoBlack, sans-serif' }}
+            >
+              Assessments
+            </NavLink>
+          )}
+          {userRole === 'STUDENT' && (
+            <NavLink
+              to="/assessments/student"
+              className={({ isActive }) =>
+                `rounded-md px-3 py-2 text-xl font-medium text-gray-700 transition-colors duration-200 hover:text-cyan-600 ${
+                  isActive
+                    ? 'text-cyan-700 underline decoration-cyan-600 decoration-2 underline-offset-8'
+                    : ''
+                }`
+              }
+              style={{ fontFamily: 'LatoBlack, sans-serif' }}
+            >
+              Take Assessment
+            </NavLink>
+          )}
 
           {/* Right side - Auth Buttons or User Info */}
           <div className="flex items-center space-x-4">
@@ -235,13 +260,25 @@ const Navbar = () => {
             >
               Questions
             </Link>
-            <Link
-              to="/assessments"
-              className="block rounded-md px-3 py-2 text-lg font-medium text-gray-700 hover:text-cyan-600"
-              style={{ fontFamily: 'LatoBlack, sans-serif' }}
-            >
-              Assessments
-            </Link>
+            {/* Assessment link - different for TEACHER and STUDENT */}
+            {userRole === 'TEACHER' && (
+              <Link
+                to="/assessments"
+                className="block rounded-md px-3 py-2 text-lg font-medium text-gray-700 hover:text-cyan-600"
+                style={{ fontFamily: 'LatoBlack, sans-serif' }}
+              >
+                Assessments
+              </Link>
+            )}
+            {userRole === 'STUDENT' && (
+              <Link
+                to="/assessments/student"
+                className="block rounded-md px-3 py-2 text-lg font-medium text-gray-700 hover:text-cyan-600"
+                style={{ fontFamily: 'LatoBlack, sans-serif' }}
+              >
+                Take Assessment
+              </Link>
+            )}
             <div className="border-t border-gray-200 pt-2">
               <Link
                 to="/signin"
