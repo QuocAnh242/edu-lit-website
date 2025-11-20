@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -41,6 +42,7 @@ interface QuestionOption {
 
 export default function CreateQuestionPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [questionType, setQuestionType] = useState<QuestionType>(
     QuestionType.Multichoice
   );
@@ -284,6 +286,17 @@ export default function CreateQuestionPage() {
         icon: <CheckCircle className="h-5 w-5 text-green-500" />
       });
 
+      // Save questionBankId before resetting form
+      const savedQuestionBankId = selectedQuestionBankId;
+
+      // Invalidate questions query to refresh the list
+      if (savedQuestionBankId) {
+        queryClient.invalidateQueries({
+          queryKey: ['questions', savedQuestionBankId]
+        });
+      }
+      queryClient.invalidateQueries({ queryKey: ['questions'] });
+
       // Reset form
       setTitle('');
       setBody('');
@@ -295,9 +308,12 @@ export default function CreateQuestionPage() {
       setSelectedQuestionBankId('');
       setErrors({});
 
-      // Navigate back or to questions list
+      // Navigate back to questions list with the questionBankId preserved
       setTimeout(() => {
-        navigate('/questions');
+        const returnUrl = savedQuestionBankId
+          ? `/questions?questionBankId=${savedQuestionBankId}`
+          : '/questions';
+        navigate(returnUrl);
       }, 1500);
     } catch (error) {
       console.error('Error creating question:', error);

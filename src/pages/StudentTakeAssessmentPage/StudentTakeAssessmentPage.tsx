@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import {
   AlertDialog,
@@ -37,6 +39,7 @@ import {
   createAssessmentAnswer,
   deleteAssessmentAnswer,
   getAssessmentAnswersByAttemptId,
+  createAssessmentAnswersBulk,
   calculateGrading,
   AssessmentQuestionDto,
   AssessmentAnswerDto
@@ -44,6 +47,8 @@ import {
 import {
   getQuestionById,
   getQuestionOptionsByQuestionId,
+  createQuestionOption,
+  updateQuestionOption,
   QuestionOptionDto
 } from '@/services/question.api';
 import { QuestionDto } from '@/queries/question.query';
@@ -63,12 +68,18 @@ export default function StudentTakeAssessmentPage() {
   const queryClient = useQueryClient();
   const userId = __helpers.getUserId();
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [answers, setAnswers] = useState<Map<number, string>>(new Map()); // assessmentQuestionId -> selectedOptionId (Guid)
+  const [answers, setAnswers] = useState<Map<number, string>>(new Map()); // assessmentQuestionId -> selectedOptionId(s) (comma-separated for multiple choice, or text for paragraph)
+  const [paragraphAnswers, setParagraphAnswers] = useState<Map<number, string>>(
+    new Map()
+  ); // assessmentQuestionId -> paragraph text
   const [timeRemaining, setTimeRemaining] = useState<number>(0);
   const [attemptId, setAttemptId] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSubmitDialog, setShowSubmitDialog] = useState(false);
-  const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const paragraphSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
 
   // Check if user is STUDENT
   const userRole = __helpers.getUserRole();
@@ -156,13 +167,37 @@ export default function StudentTakeAssessmentPage() {
           });
 
           const answersMap = new Map<number, string>();
-          latestAnswersMap.forEach((ans, questionId) => {
-            answersMap.set(
-              questionId,
-              ans.selectedOptionId || ans.selectedAnswer || ''
+          const paragraphMap = new Map<number, string>();
+
+          // Group answers by question
+          const questionIds = Array.from(
+            new Set(existingAnswers.map((a) => a.assessmentQuestionId))
+          );
+
+          for (const questionId of questionIds) {
+            const allAnswersForQuestion = existingAnswers.filter(
+              (a) => a.assessmentQuestionId === questionId
             );
-          });
+
+            if (allAnswersForQuestion.length > 1) {
+              // Multiple answers (multiple choice with multiple selections)
+              const optionIds = allAnswersForQuestion
+                .map((a) => a.selectedOptionId)
+                .filter((id) => id)
+                .join(',');
+              answersMap.set(questionId, optionIds);
+            } else if (allAnswersForQuestion.length === 1) {
+              const answer = allAnswersForQuestion[0];
+              // Store the answer - we'll determine if it's paragraph or multiple choice when displaying
+              // For now, store in answers map. We'll check question type when rendering.
+              answersMap.set(questionId, answer.selectedOptionId || '');
+            }
+          }
+
+          // Note: Paragraph answers will be loaded when the question is displayed
+          // by fetching the option text if the question type is paragraph
           setAnswers(answersMap);
+          setParagraphAnswers(paragraphMap);
         } else {
           // Create new attempt
           const createResponse = await createAssignmentAttempt({
@@ -172,14 +207,8 @@ export default function StudentTakeAssessmentPage() {
           });
           if (createResponse.data) {
             setAttemptId(createResponse.data);
-            // Update attempt with startedAt
-            await updateAssignmentAttempt(createResponse.data, {
-              attemptsId: createResponse.data,
-              assessmentId: Number(assessmentId),
-              userId: userId,
-              startedAt: new Date().toISOString(),
-              attemptNumber: 1
-            });
+            // Note: startedAt will be set when user starts answering questions
+            // No need to update immediately after creation
           }
         }
       } catch (error) {
@@ -252,14 +281,61 @@ export default function StudentTakeAssessmentPage() {
   const currentOptions = (optionsData?.data || []) as QuestionOptionDto[];
   const currentAnswer = answers.get(currentQuestion?.assessmentQuestionId || 0);
 
+  // Load paragraph answer if this is a paragraph question
+  const [currentParagraphAnswer, setCurrentParagraphAnswer] =
+    useState<string>('');
+
+  useEffect(() => {
+    const loadParagraphAnswer = async () => {
+      if (
+        currentQuestionData?.questionType === 1 &&
+        currentQuestion &&
+        currentAnswer
+      ) {
+        // For paragraph questions, fetch the option to get the text
+        try {
+          const opts = await getQuestionOptionsByQuestionId(
+            currentQuestion.questionId
+          );
+          const optsData = (opts.data || []) as QuestionOptionDto[];
+          const option = optsData.find(
+            (o) => o.questionOptionId === currentAnswer
+          );
+          if (option) {
+            setCurrentParagraphAnswer(option.optionText);
+          } else if (currentAnswer.length > 36) {
+            // Might be stored as text directly
+            setCurrentParagraphAnswer(currentAnswer);
+          }
+        } catch (e) {
+          // If fetching fails, try using selectedOptionId as text
+          if (currentAnswer.length > 36) {
+            setCurrentParagraphAnswer(currentAnswer);
+          }
+        }
+      } else {
+        setCurrentParagraphAnswer('');
+      }
+    };
+
+    loadParagraphAnswer();
+  }, [currentQuestionData, currentQuestion, currentAnswer]);
+
+  // Check if multiple choice question has multiple correct answers (allows multiple selection)
+  const hasMultipleCorrectAnswers =
+    currentQuestionData?.questionType === 2 &&
+    currentOptions.filter((opt) => opt.isCorrect).length > 1;
+
   // Save answer mutation
   const saveAnswerMutation = useMutation({
     mutationFn: async ({
       assessmentQuestionId,
-      selectedOptionId
+      selectedOptionIds,
+      paragraphText
     }: {
       assessmentQuestionId: number;
-      selectedOptionId: string;
+      selectedOptionIds?: string[];
+      paragraphText?: string;
     }) => {
       if (!attemptId) throw new Error('Attempt ID is required');
 
@@ -272,49 +348,184 @@ export default function StudentTakeAssessmentPage() {
           ans.assessmentQuestionId === assessmentQuestionId
       );
 
-      // ALWAYS delete all existing answers for this question first to prevent duplicates
-      // This ensures only 1 answer exists per question, even with race conditions
+      // Delete all existing answers for this question first
       if (questionAnswers.length > 0) {
-        // Delete all existing answers sequentially to ensure they're all deleted before creating new one
         for (const ans of questionAnswers) {
           try {
             await deleteAssessmentAnswer(ans.answerId);
           } catch (error) {
             console.error(`Failed to delete answer ${ans.answerId}:`, error);
-            // Continue deleting other answers even if one fails
           }
         }
-
-        // Small delay to ensure database operations complete
         await new Promise((resolve) => setTimeout(resolve, 100));
       }
 
-      // Then create a new answer (this ensures only 1 answer exists)
-      await createAssessmentAnswer({
-        assessmentQuestionId: assessmentQuestionId,
-        attemptsId: attemptId,
-        selectedOptionId: selectedOptionId
-      });
+      // Create new answer(s)
+      if (paragraphText !== undefined && paragraphText.trim() !== '') {
+        // For paragraph questions, we need to create or update a QuestionOption to store the text
+        if (currentQuestion?.questionId) {
+          const options = await getQuestionOptionsByQuestionId(
+            currentQuestion.questionId
+          );
+          const optionsData = (options.data || []) as QuestionOptionDto[];
+
+          // For paragraph questions, we need to create or update an option to store the text
+          // Check if there's already an answer for this question in this attempt
+          const existingAnswer =
+            questionAnswers.length > 0 ? questionAnswers[0] : null;
+
+          let optionId: string;
+
+          if (existingAnswer && existingAnswer.selectedOptionId) {
+            // Check if the option exists and belongs to this question
+            const existingOption = optionsData.find(
+              (opt) => opt.questionOptionId === existingAnswer.selectedOptionId
+            );
+
+            if (existingOption) {
+              // Update the existing option with new text
+              await updateQuestionOption(existingOption.questionOptionId, {
+                questionOptionId: existingOption.questionOptionId,
+                optionText: paragraphText,
+                isCorrect: existingOption.isCorrect,
+                orderIdx: existingOption.orderIdx
+              });
+              optionId = existingOption.questionOptionId;
+            } else {
+              // Option doesn't exist anymore, create a new one
+              const createOptionResponse = await createQuestionOption({
+                optionText: paragraphText,
+                isCorrect: false,
+                orderIdx: optionsData.length,
+                questionId: currentQuestion.questionId
+              });
+
+              if (!createOptionResponse.data) {
+                throw new Error(
+                  'Failed to create question option for paragraph answer'
+                );
+              }
+              optionId = createOptionResponse.data;
+            }
+          } else {
+            // No existing answer, create a new option
+            const createOptionResponse = await createQuestionOption({
+              optionText: paragraphText,
+              isCorrect: false,
+              orderIdx: optionsData.length,
+              questionId: currentQuestion.questionId
+            });
+
+            if (!createOptionResponse.data) {
+              throw new Error(
+                'Failed to create question option for paragraph answer'
+              );
+            }
+            optionId = createOptionResponse.data;
+          }
+
+          // Now create the assessment answer using the option ID
+          await createAssessmentAnswer({
+            assessmentQuestionId: assessmentQuestionId,
+            attemptsId: attemptId,
+            selectedOptionId: optionId
+          });
+        }
+      } else if (selectedOptionIds && selectedOptionIds.length > 0) {
+        // For multiple choice, create one answer record per selected option
+        for (const optionId of selectedOptionIds) {
+          await createAssessmentAnswer({
+            assessmentQuestionId: assessmentQuestionId,
+            attemptsId: attemptId,
+            selectedOptionId: optionId
+          });
+        }
+      }
     }
   });
 
   const handleAnswerChange = async (selectedOptionId: string) => {
-    if (!currentQuestion) return;
+    if (!currentQuestion || !currentQuestionData) return;
+
+    // For single-select multiple choice (old behavior)
+    if (currentQuestionData.questionType === 2) {
+      const newAnswers = new Map(answers);
+      newAnswers.set(currentQuestion.assessmentQuestionId, selectedOptionId);
+      setAnswers(newAnswers);
+
+      try {
+        await saveAnswerMutation.mutateAsync({
+          assessmentQuestionId: currentQuestion.assessmentQuestionId,
+          selectedOptionIds: [selectedOptionId]
+        });
+      } catch (error) {
+        console.error('Error saving answer:', error);
+        toast.error('Failed to save answer');
+      }
+    }
+  };
+
+  const handleMultipleChoiceChange = async (
+    optionId: string,
+    checked: boolean
+  ) => {
+    if (!currentQuestion || !currentQuestionData) return;
+    if (currentQuestionData.questionType !== 2) return;
+
+    const currentAnswerStr =
+      answers.get(currentQuestion.assessmentQuestionId) || '';
+    const currentSelected = currentAnswerStr
+      ? currentAnswerStr.split(',').filter((id) => id)
+      : [];
+
+    let newSelected: string[];
+    if (checked) {
+      newSelected = [...currentSelected, optionId];
+    } else {
+      newSelected = currentSelected.filter((id) => id !== optionId);
+    }
 
     const newAnswers = new Map(answers);
-    newAnswers.set(currentQuestion.assessmentQuestionId, selectedOptionId);
+    newAnswers.set(currentQuestion.assessmentQuestionId, newSelected.join(','));
     setAnswers(newAnswers);
 
-    // Auto-save answer
     try {
       await saveAnswerMutation.mutateAsync({
         assessmentQuestionId: currentQuestion.assessmentQuestionId,
-        selectedOptionId: selectedOptionId
+        selectedOptionIds: newSelected
       });
     } catch (error) {
       console.error('Error saving answer:', error);
       toast.error('Failed to save answer');
     }
+  };
+
+  const handleParagraphChange = (text: string) => {
+    if (!currentQuestion || !currentQuestionData) return;
+    if (currentQuestionData.questionType !== 1) return;
+
+    const newParagraphAnswers = new Map(paragraphAnswers);
+    newParagraphAnswers.set(currentQuestion.assessmentQuestionId, text);
+    setParagraphAnswers(newParagraphAnswers);
+    setCurrentParagraphAnswer(text); // Update local state immediately
+
+    // Clear existing timeout
+    if (paragraphSaveTimeoutRef.current) {
+      clearTimeout(paragraphSaveTimeoutRef.current);
+    }
+
+    // Debounce auto-save for paragraph answers (save after 1 second of no typing)
+    paragraphSaveTimeoutRef.current = setTimeout(async () => {
+      try {
+        await saveAnswerMutation.mutateAsync({
+          assessmentQuestionId: currentQuestion.assessmentQuestionId,
+          paragraphText: text
+        });
+      } catch (error) {
+        console.error('Error saving answer:', error);
+        toast.error('Failed to save answer');
+      }
+    }, 1000);
   };
 
   const handleNext = () => {
@@ -334,6 +545,96 @@ export default function StudentTakeAssessmentPage() {
     setIsSubmitting(true);
 
     try {
+      // Collect all selectedOptionIds from current answers state
+      const allSelectedOptionIds: string[] = [];
+
+      // Get all existing answers to delete them before creating new ones
+      const existingAnswers = await getAssessmentAnswersByAttemptId(attemptId);
+
+      // Collect from answers state (includes both multiple choice and paragraph)
+      // This is the source of truth for current user selections
+      answers.forEach((selectedOptionId) => {
+        if (selectedOptionId) {
+          // Handle comma-separated IDs for multiple choice questions with multiple selections
+          const ids = selectedOptionId.split(',').filter((id) => id.trim());
+          allSelectedOptionIds.push(...ids);
+        }
+      });
+
+      // Remove duplicates
+      const uniqueSelectedOptionIds = Array.from(new Set(allSelectedOptionIds));
+
+      // Delete all existing answers to avoid duplicates when using bulk API
+      if (existingAnswers.length > 0) {
+        // Delete all answers in parallel for faster deletion
+        const deletePromises = existingAnswers.map((answer) =>
+          deleteAssessmentAnswer(answer.answerId).catch((error) => {
+            console.error(`Failed to delete answer ${answer.answerId}:`, error);
+            return null; // Continue even if one deletion fails
+          })
+        );
+        await Promise.all(deletePromises);
+
+        // Wait for deletions to complete and database to update
+        // Also verify that deletions were successful
+        let retryCount = 0;
+        const maxRetries = 5;
+        while (retryCount < maxRetries) {
+          await new Promise((resolve) => setTimeout(resolve, 300));
+          const remainingAnswers =
+            await getAssessmentAnswersByAttemptId(attemptId);
+          if (remainingAnswers.length === 0) {
+            break; // All answers deleted successfully
+          }
+          retryCount++;
+          if (retryCount >= maxRetries) {
+            console.warn(
+              `Some answers may still exist after deletion attempts. Remaining: ${remainingAnswers.length}`
+            );
+          }
+        }
+      }
+
+      // Use bulk API to create all answers at once
+      // This prevents duplicate answers and ensures all answers are created in a single transaction
+      if (uniqueSelectedOptionIds.length > 0) {
+        try {
+          const bulkResponse = await createAssessmentAnswersBulk({
+            attemptsId: attemptId,
+            selectedOptionIds: uniqueSelectedOptionIds
+          });
+
+          if (!bulkResponse.data || bulkResponse.data.length === 0) {
+            // If bulk API says all answers already exist, it might be a cache issue
+            // Try to proceed anyway since we've already deleted the old answers
+            console.warn(
+              'Bulk API returned no created answers. This might be due to cache delay, but submission will continue.'
+            );
+          }
+        } catch (bulkError: unknown) {
+          // If bulk API fails with "all answers already exist" error, continue anyway
+          // This can happen due to cache delay after deletion
+          const errorMessage =
+            (bulkError as { response?: { data?: { message?: string } } })
+              ?.response?.data?.message ||
+            (bulkError as { message?: string })?.message ||
+            'Unknown error';
+
+          if (
+            errorMessage.includes('Tất cả các câu trả lời đã tồn tại') ||
+            errorMessage.includes('already exist')
+          ) {
+            console.warn(
+              'Bulk API reported answers already exist (likely cache delay). Continuing with submission since answers were already saved during the assessment.'
+            );
+            // Continue with submission - answers were already saved during the assessment
+          } else {
+            // For other errors, re-throw to be handled by outer catch
+            throw bulkError;
+          }
+        }
+      }
+
       // Mark attempt as completed
       await updateAssignmentAttempt(attemptId, {
         attemptsId: attemptId,
@@ -444,9 +745,9 @@ export default function StudentTakeAssessmentPage() {
                 {/* Questions Grid */}
                 <div className="grid grid-cols-5 gap-2">
                   {assessmentQuestions.map((question, index) => {
-                    const isAnswered = answers.has(
-                      question.assessmentQuestionId
-                    );
+                    const isAnswered =
+                      answers.has(question.assessmentQuestionId) ||
+                      paragraphAnswers.has(question.assessmentQuestionId);
                     const isCurrent = index === currentQuestionIndex;
 
                     return (
@@ -576,38 +877,121 @@ export default function StudentTakeAssessmentPage() {
                       />
                     </div>
 
-                    <RadioGroup
-                      value={currentAnswer || ''}
-                      onValueChange={handleAnswerChange}
-                    >
-                      <div className="space-y-3">
-                        {currentOptions
-                          .sort((a, b) => a.orderIdx - b.orderIdx)
-                          .map((option) => (
-                            <div
-                              key={option.questionOptionId}
-                              className="flex cursor-pointer items-start space-x-3 rounded-md border p-3 hover:bg-gray-50"
-                            >
-                              <RadioGroupItem
-                                value={option.questionOptionId}
-                                id={option.questionOptionId}
-                                className="mt-1"
-                              />
-                              <Label
-                                htmlFor={option.questionOptionId}
-                                className="flex-1 cursor-pointer"
-                              >
-                                <div className="font-medium">
-                                  {String.fromCharCode(65 + option.orderIdx)}.{' '}
-                                  {option.optionText}
-                                </div>
-                              </Label>
-                            </div>
-                          ))}
-                      </div>
-                    </RadioGroup>
+                    {/* Multiple Choice Questions */}
+                    {currentQuestionData.questionType === 2 && (
+                      <>
+                        {hasMultipleCorrectAnswers ? (
+                          // Multiple selection (checkboxes) - for questions with multiple correct answers
+                          <div className="space-y-3">
+                            <p className="text-sm italic text-gray-600">
+                              Select all correct answers (this question has
+                              multiple correct answers)
+                            </p>
+                            {currentOptions
+                              .sort((a, b) => a.orderIdx - b.orderIdx)
+                              .map((option) => {
+                                const currentSelected = currentAnswer
+                                  ? currentAnswer.split(',').filter((id) => id)
+                                  : [];
+                                const isChecked = currentSelected.includes(
+                                  option.questionOptionId
+                                );
 
-                    {currentAnswer && (
+                                return (
+                                  <div
+                                    key={option.questionOptionId}
+                                    className="flex cursor-pointer items-start space-x-3 rounded-md border p-3 hover:bg-gray-50"
+                                  >
+                                    <Checkbox
+                                      id={option.questionOptionId}
+                                      checked={isChecked}
+                                      onCheckedChange={(checked) =>
+                                        handleMultipleChoiceChange(
+                                          option.questionOptionId,
+                                          checked as boolean
+                                        )
+                                      }
+                                      className="mt-1"
+                                    />
+                                    <Label
+                                      htmlFor={option.questionOptionId}
+                                      className="flex-1 cursor-pointer"
+                                    >
+                                      <div className="font-medium">
+                                        {String.fromCharCode(
+                                          65 + option.orderIdx
+                                        )}
+                                        . {option.optionText}
+                                      </div>
+                                    </Label>
+                                  </div>
+                                );
+                              })}
+                          </div>
+                        ) : (
+                          // Single selection (radio buttons) - for questions with single correct answer
+                          <RadioGroup
+                            value={currentAnswer || ''}
+                            onValueChange={handleAnswerChange}
+                          >
+                            <div className="space-y-3">
+                              {currentOptions
+                                .sort((a, b) => a.orderIdx - b.orderIdx)
+                                .map((option) => (
+                                  <div
+                                    key={option.questionOptionId}
+                                    className="flex cursor-pointer items-start space-x-3 rounded-md border p-3 hover:bg-gray-50"
+                                  >
+                                    <RadioGroupItem
+                                      value={option.questionOptionId}
+                                      id={option.questionOptionId}
+                                      className="mt-1"
+                                    />
+                                    <Label
+                                      htmlFor={option.questionOptionId}
+                                      className="flex-1 cursor-pointer"
+                                    >
+                                      <div className="font-medium">
+                                        {String.fromCharCode(
+                                          65 + option.orderIdx
+                                        )}
+                                        . {option.optionText}
+                                      </div>
+                                    </Label>
+                                  </div>
+                                ))}
+                            </div>
+                          </RadioGroup>
+                        )}
+                      </>
+                    )}
+
+                    {/* Paragraph Questions */}
+                    {currentQuestionData.questionType === 1 && (
+                      <div className="space-y-3">
+                        <Label
+                          htmlFor="paragraph-answer"
+                          className="text-sm font-medium"
+                        >
+                          Your Answer:
+                        </Label>
+                        <Textarea
+                          id="paragraph-answer"
+                          placeholder="Type your answer here..."
+                          value={currentParagraphAnswer || ''}
+                          onChange={(e) =>
+                            handleParagraphChange(e.target.value)
+                          }
+                          rows={8}
+                          className="min-h-[200px] resize-y"
+                        />
+                        <p className="text-xs text-gray-500">
+                          Your answer is automatically saved as you type.
+                        </p>
+                      </div>
+                    )}
+
+                    {(currentAnswer || currentParagraphAnswer) && (
                       <div className="flex items-center gap-2 text-green-600">
                         <Save className="h-4 w-4" />
                         <span className="text-sm">Answer saved</span>

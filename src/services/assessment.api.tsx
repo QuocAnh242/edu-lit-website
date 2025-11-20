@@ -102,6 +102,11 @@ export interface CreateAssessmentAnswerRequest {
   selectedOptionId: string; // Guid of QuestionOption
 }
 
+export interface CreateAssessmentAnswersBulkRequest {
+  attemptsId: number;
+  selectedOptionIds: string[]; // Array of Guid of QuestionOption
+}
+
 export interface UpdateAssessmentAnswerRequest {
   answerId: number;
   assessmentQuestionId: number;
@@ -550,6 +555,29 @@ export const deleteAssessmentAnswer = async (
     return response.data || response.Data || false;
   } catch (error) {
     console.error('Delete Assessment Answer Error:', error);
+    throw error;
+  }
+};
+
+/**
+ * Create multiple assessment answers in bulk
+ * @param data - Bulk Assessment Answer data to create
+ * @returns ObjectResponse with array of created assessment answer IDs
+ */
+export const createAssessmentAnswersBulk = async (
+  data: CreateAssessmentAnswersBulkRequest
+): Promise<ObjectResponse<number[]>> => {
+  try {
+    const response = await BaseRequest.Post<ObjectResponse<number[]>>(
+      '/api/v1/assessmentanswer/bulk',
+      {
+        attemptsId: data.attemptsId,
+        selectedOptionIds: data.selectedOptionIds
+      }
+    );
+    return response;
+  } catch (error) {
+    console.error('Create Assessment Answers Bulk Error:', error);
     throw error;
   }
 };
