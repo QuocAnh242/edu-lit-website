@@ -45,6 +45,7 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import {
+  getCoursesBySyllabusId,
   createCourse,
   updateCourse,
   deleteCourse,

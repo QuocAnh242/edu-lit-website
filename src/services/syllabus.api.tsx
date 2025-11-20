@@ -203,9 +203,12 @@ export interface UpdateSyllabusRequest {
 // ============================================================================
 
 /**
- * Get all syllabuses with pagination
- * @param request - Pagination and filter parameters
- * @returns ApiResponse with PagedResult of SyllabusDto
+ * Get all syllabuses
+ * NOTE: The API gateway routes /api/v1/syllabus to the write service which doesn't have a GET endpoint.
+ * The query service has /api/v1/syllabuses but it's not routed through the gateway.
+ * This function tries the query service endpoint first, then falls back gracefully.
+ * @param request - Filter parameters (applied client-side)
+ * @returns ApiResponse with array of SyllabusDto (wrapped in PagedResult for compatibility)
  */
 export const getAllSyllabuses = async (
   request?: GetPaginationSyllabusRequest
@@ -230,8 +233,9 @@ export const getAllSyllabuses = async (
       params.append('isActive', request.isActive.toString());
     }
 
-    const queryString = params.toString();
-    const url = `/api/v1/syllabus${queryString ? `?${queryString}` : ''}`;
+    // Transform the response to match the expected PagedResult format
+    if (response.success && response.data) {
+      let syllabuses = response.data;
 
     console.log('🔵 [GET SYLLABUSES API] URL:', url);
     console.log(
@@ -335,7 +339,7 @@ export const getSyllabusById = async (
 ): Promise<ApiResponse<SyllabusDto>> => {
   try {
     const response = await BaseRequest.Get<ApiResponse<SyllabusDto>>(
-      `/api/v1/syllabus/${syllabusId}`
+      `/api/v1/syllabuses/${syllabusId}`
     );
     return response;
   } catch (error) {

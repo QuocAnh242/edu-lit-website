@@ -9,6 +9,7 @@ const DashboardLayout = lazy(
 
 const SignInPage = lazy(() => import('@/pages/auth/signin'));
 const SignUpPage = lazy(() => import('@/pages/auth/signup'));
+const ForgetPasswordPage = lazy(() => import('@/pages/auth/forget-password'));
 const HomePage = lazy(() => import('@/pages/HomePage/index'));
 const LessonPage = lazy(() => import('@/pages/SyllabusPage/index'));
 const CoursePage = lazy(() => import('@/pages/Course/index'));
@@ -18,6 +19,18 @@ const QuestionsPage = lazy(() => import('@/pages/QuestionsPage'));
 const ViewQuestionPage = lazy(() => import('@/pages/ViewQuestionPage'));
 const EditQuestionPage = lazy(() => import('@/pages/EditQuestionPage'));
 const AssessmentPage = lazy(() => import('@/pages/AssessmentPage'));
+const TeacherAssessmentSubmissionsPage = lazy(
+  () => import('@/pages/TeacherAssessmentSubmissionsPage')
+);
+const StudentAssessmentsPage = lazy(
+  () => import('@/pages/StudentAssessmentsPage')
+);
+const StudentTakeAssessmentPage = lazy(
+  () => import('@/pages/StudentTakeAssessmentPage')
+);
+const StudentAssessmentResultsPage = lazy(
+  () => import('@/pages/StudentAssessmentResultsPage')
+);
 const CreateLessonPage = lazy(
   () => import('@/pages/SyllabusPage/CreateLessonPage')
 );
@@ -129,6 +142,38 @@ export default function AppRouter() {
           )
         },
         {
+          path: '/assessments/:assessmentId/submissions',
+          element: (
+            <Suspense fallback={<div>Loading...</div>}>
+              <TeacherAssessmentSubmissionsPage />
+            </Suspense>
+          )
+        },
+        {
+          path: '/assessments/student',
+          element: (
+            <Suspense fallback={<div>Loading...</div>}>
+              <StudentAssessmentsPage />
+            </Suspense>
+          )
+        },
+        {
+          path: '/assessments/:assessmentId/take',
+          element: (
+            <Suspense fallback={<div>Loading...</div>}>
+              <StudentTakeAssessmentPage />
+            </Suspense>
+          )
+        },
+        {
+          path: '/assessments/:assessmentId/results',
+          element: (
+            <Suspense fallback={<div>Loading...</div>}>
+              <StudentAssessmentResultsPage />
+            </Suspense>
+          )
+        },
+        {
           path: '/courses/create',
           element: (
             <Suspense fallback={<div>Loading...</div>}>
@@ -220,6 +265,14 @@ export default function AppRouter() {
     {
       path: '/signup',
       element: <SignUpPage />
+    },
+    {
+      path: '/forget-password',
+      element: (
+        <Suspense fallback={<div>Loading...</div>}>
+          <ForgetPasswordPage />
+        </Suspense>
+      )
     },
     {
       path: '/404',

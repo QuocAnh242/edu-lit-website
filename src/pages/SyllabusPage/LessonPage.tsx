@@ -266,10 +266,12 @@ export default function LessonPage() {
       console.error('❌ [CREATE SYLLABUS ERROR] Full error:', error);
 
       // Extract error message from API response
+      // Axios interceptor already extracts error.response.data, so error is the API response object
       const apiError = error as {
         message?: string;
         errors?: string[];
         errorCode?: string | number;
+        success?: boolean;
       };
 
       console.error('❌ [CREATE SYLLABUS ERROR] Parsed error:', {
