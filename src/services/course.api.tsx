@@ -25,7 +25,23 @@ export interface PagedResult<T> {
   hasNextPage: boolean;
 }
 
-// Course DTOs
+// MongoDB Response (from Query Service)
+interface MongoCourseResponse {
+  _id?: string;
+  course_id?: any;
+  syllabus_id?: any;
+  title: string;
+  description?: string;
+  course_code?: string;
+  order_index?: number;
+  duration_weeks?: number;
+  objectives?: any[];
+  is_active?: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+// Course DTOs (Frontend format)
 export interface CourseDto {
   id: string;
   syllabusId: string;
@@ -35,6 +51,34 @@ export interface CourseDto {
   createdAt?: string;
   updatedAt?: string;
 }
+
+// Helper function to convert MongoDB Binary to string
+const convertBinaryToString = (binary: any): string => {
+  if (!binary) return '';
+  if (typeof binary === 'string') return binary;
+  if (binary.toString && typeof binary.toString === 'function') {
+    return binary.toString();
+  }
+  return String(binary);
+};
+
+// Helper function to convert MongoDB response to CourseDto
+const mapMongoCourseToDto = (mongo: MongoCourseResponse): CourseDto => {
+  const id = mongo._id
+    ? convertBinaryToString(mongo._id)
+    : convertBinaryToString(mongo.course_id);
+  const syllabusId = convertBinaryToString(mongo.syllabus_id);
+
+  return {
+    id: id,
+    syllabusId: syllabusId,
+    courseCode: mongo.course_code || '',
+    title: mongo.title,
+    description: mongo.description,
+    createdAt: mongo.created_at,
+    updatedAt: mongo.updated_at
+  };
+};
 
 // Request Types
 export interface GetPaginationCoursesRequest {
@@ -86,11 +130,54 @@ export const getAllCourses = async (
     }
 
     const queryString = params.toString();
-    const url = `/api/v1/course${queryString ? `?${queryString}` : ''}`;
+    const url = `/api/v1/courses${queryString ? `?${queryString}` : ''}`;
 
-    const response =
-      await BaseRequest.Get<ApiResponse<PagedResult<CourseDto>>>(url);
-    return response;
+    const response = await BaseRequest.Get<ApiResponse<PagedResult<any>>>(url);
+
+    // Check if response.data is an array (Query Service returns array directly)
+    let rawItems: any[] = [];
+
+    if (Array.isArray(response?.data)) {
+      rawItems = response.data;
+    } else if (response?.data?.items && Array.isArray(response.data.items)) {
+      rawItems = response.data.items;
+    }
+
+    // Map MongoDB response to frontend DTO format
+    if (rawItems.length > 0) {
+      const mappedItems = rawItems.map((item: MongoCourseResponse) =>
+        mapMongoCourseToDto(item)
+      );
+
+      return {
+        success: true,
+        message: response?.message || null,
+        data: {
+          items: mappedItems,
+          totalCount: rawItems.length,
+          pageNumber: request?.pageNumber || 1,
+          pageSize: request?.pageSize || 1000,
+          totalPages: 1,
+          hasPreviousPage: false,
+          hasNextPage: false
+        }
+      } as ApiResponse<PagedResult<CourseDto>>;
+    }
+
+    // Return empty PagedResult
+    return {
+      success: true,
+      message: response?.message || null,
+      data: {
+        items: [],
+        totalCount: 0,
+        pageNumber: 1,
+        pageSize: 1000,
+        totalPages: 0,
+        hasPreviousPage: false,
+        hasNextPage: false
+      }
+    } as ApiResponse<PagedResult<CourseDto>>;
   } catch (error) {
     console.error('Get All Courses Error:', error);
     throw error;
@@ -107,7 +194,7 @@ export const getCourseById = async (
 ): Promise<ApiResponse<CourseDto>> => {
   try {
     const response = await BaseRequest.Get<ApiResponse<CourseDto>>(
-      `/api/v1/course/${courseId}`
+      `/api/v1/courses/${courseId}`
     );
     return response;
   } catch (error) {
@@ -126,7 +213,7 @@ export const createCourse = async (
 ): Promise<ApiResponse<string>> => {
   try {
     const response = await BaseRequest.Post<ApiResponse<string>>(
-      '/api/v1/course',
+      '/api/v1/courses',
       data
     );
     return response;
@@ -148,7 +235,7 @@ export const updateCourse = async (
 ): Promise<ApiResponse<boolean>> => {
   try {
     const response = await BaseRequest.Put<ApiResponse<boolean>>(
-      `/api/v1/course/${courseId}`,
+      `/api/v1/courses/${courseId}`,
       data
     );
     return response;
@@ -168,7 +255,7 @@ export const deleteCourse = async (
 ): Promise<ApiResponse<boolean>> => {
   try {
     const response = (await BaseRequest.Delete<ApiResponse<boolean>>(
-      `/api/v1/course/${courseId}`
+      `/api/v1/courses/${courseId}`
     )) as ApiResponse<boolean>;
     return response;
   } catch (error) {
