@@ -35,7 +35,44 @@ export enum Semester {
   CuoiHocKiII = 5
 }
 
-// Syllabus DTOs
+// MongoDB Response (from Query Service)
+interface MongoSyllabusResponse {
+  // MongoDB native fields (snake_case)
+  _id?: string;
+  syllabus_id?: string;
+  title?: string;
+  grade_level?: string; // Maps to academicYear
+  subject?: string; // Maps to semester (as string)
+  description?: string;
+  status?: string; // Maps to isActive
+  created_by?: string; // Maps to ownerId
+  is_active?: boolean;
+  created_at?: string;
+  updated_at?: string;
+  version?: string;
+  courses?: any[]; // Courses array from MongoDB
+
+  // C# API serialized fields (camelCase - default JSON serialization)
+  syllabusId?: string;
+  gradeLevel?: string;
+  createdBy?: string;
+  createdAt?: string;
+  updatedAt?: string;
+
+  // C# API serialized fields (PascalCase - if configured)
+  Title?: string;
+  GradeLevel?: string;
+  Subject?: string;
+  Description?: string;
+  Status?: string;
+  CreatedBy?: string;
+  IsActive?: boolean;
+  CreatedAt?: string;
+  UpdatedAt?: string;
+  SyllabusId?: string;
+}
+
+// Syllabus DTOs (Frontend format)
 export interface SyllabusDto {
   id: string;
   title: string;
@@ -47,6 +84,95 @@ export interface SyllabusDto {
   createdAt?: string;
   updatedAt?: string;
 }
+
+// Helper function to map semester string to enum
+const mapSemesterStringToEnum = (subject: string): Semester => {
+  switch (subject) {
+    case 'HocKiI':
+      return Semester.HocKiI;
+    case 'HocKiII':
+      return Semester.HocKiII;
+    case 'GiuaHocKiI':
+      return Semester.GiuaHocKiI;
+    case 'GiuaHocKiII':
+      return Semester.GiuaHocKiII;
+    case 'CuoiHocKiI':
+      return Semester.CuoiHocKiI;
+    case 'CuoiHocKiII':
+      return Semester.CuoiHocKiII;
+    default:
+      return Semester.HocKiI; // Default fallback
+  }
+};
+
+// Helper function to convert MongoDB Binary UUID to string
+const convertBinaryToUuid = (binary: any): string => {
+  if (!binary) return '';
+  if (typeof binary === 'string') return binary;
+
+  // If it's a MongoDB ObjectId, convert to string
+  if (binary.toString && typeof binary.toString === 'function') {
+    return binary.toString();
+  }
+
+  return String(binary);
+};
+
+// Helper function to convert MongoDB response to SyllabusDto
+const mapMongoResponseToDto = (mongo: MongoSyllabusResponse): SyllabusDto => {
+  // Handle camelCase (C# API default), snake_case (MongoDB), and PascalCase (C# custom)
+  // IMPORTANT: Use syllabusId (SQL Server GUID) NOT _id (MongoDB ObjectId) for CRUD operations!
+  const id = convertBinaryToUuid(
+    mongo.syllabusId || mongo.syllabus_id || mongo.SyllabusId || mongo._id
+  );
+
+  const ownerId = convertBinaryToUuid(
+    mongo.createdBy || mongo.created_by || mongo.CreatedBy
+  );
+
+  const title = mongo.title || mongo.Title || '';
+  const gradeLevel =
+    mongo.gradeLevel || mongo.grade_level || mongo.GradeLevel || '';
+  const subject = mongo.subject || mongo.Subject || '';
+  const description = mongo.description || mongo.Description || '';
+  const status = mongo.status || mongo.Status || '';
+  const isActive =
+    status === 'Active' || mongo.is_active === true || mongo.IsActive === true;
+  const createdAt = mongo.createdAt || mongo.created_at || mongo.CreatedAt;
+  const updatedAt = mongo.updatedAt || mongo.updated_at || mongo.UpdatedAt;
+
+  console.log('🔄 [MAPPING] MongoDB item:', {
+    _id: mongo._id,
+    syllabusId: mongo.syllabusId,
+    mapped_id: id,
+    title: title,
+    gradeLevel: gradeLevel,
+    subject: subject,
+    status: status
+  });
+
+  const mapped = {
+    id: id,
+    title: title,
+    academicYear: gradeLevel,
+    semester: mapSemesterStringToEnum(subject),
+    ownerId: ownerId,
+    description: description,
+    isActive: isActive,
+    createdAt: createdAt,
+    updatedAt: updatedAt,
+    // Preserve courses array from MongoDB response
+    courses: mongo.courses || []
+  };
+
+  console.log('✅ [MAPPING] Mapped result:', mapped);
+  console.log(
+    '📚 [MAPPING] Courses in mapped result:',
+    mapped.courses?.length || 0
+  );
+
+  return mapped;
+};
 
 // Request Types
 export interface GetPaginationSyllabusRequest {
@@ -88,90 +214,117 @@ export const getAllSyllabuses = async (
   request?: GetPaginationSyllabusRequest
 ): Promise<ApiResponse<PagedResult<SyllabusDto>>> => {
   try {
-    // Try query service endpoint first (may not be routed through gateway)
-    let url = `/api/v1/syllabuses`;
-    let response: ApiResponse<SyllabusDto[]>;
+    console.log('🔵 [GET SYLLABUSES API] Request params:', request);
 
-    try {
-      response = await BaseRequest.Get<ApiResponse<SyllabusDto[]>>(url);
-    } catch (error: unknown) {
-      // If query service endpoint fails (404), try write service endpoint
-      // But write service doesn't have GET, so return empty result
-      console.warn(
-        'Query service endpoint not available, returning empty result'
-      );
-      return {
-        success: true,
-        message: 'Syllabuses endpoint not available through API gateway',
-        data: {
-          items: [],
-          totalCount: 0,
-          pageNumber: request?.pageNumber || 1,
-          pageSize: request?.pageSize || 100,
-          totalPages: 0,
-          hasPreviousPage: false,
-          hasNextPage: false
-        }
-      };
+    const params = new URLSearchParams();
+    if (request?.pageNumber) {
+      params.append('pageNumber', request.pageNumber.toString());
+    }
+    if (request?.pageSize) {
+      params.append('pageSize', request.pageSize.toString());
+    }
+    if (request?.searchTerm) {
+      params.append('searchTerm', request.searchTerm);
+    }
+    if (request?.semester !== undefined && request?.semester !== null) {
+      params.append('semester', request.semester.toString());
+    }
+    if (request?.isActive !== undefined && request?.isActive !== null) {
+      params.append('isActive', request.isActive.toString());
     }
 
     // Transform the response to match the expected PagedResult format
     if (response.success && response.data) {
       let syllabuses = response.data;
 
-      // Apply client-side filtering if needed
-      if (request?.isActive !== undefined && request?.isActive !== null) {
-        syllabuses = syllabuses.filter((s) => s.isActive === request.isActive);
-      }
-      if (request?.semester !== undefined && request?.semester !== null) {
-        syllabuses = syllabuses.filter((s) => s.semester === request.semester);
-      }
-      if (request?.searchTerm) {
-        const searchLower = request.searchTerm.toLowerCase();
-        syllabuses = syllabuses.filter(
-          (s) =>
-            s.title.toLowerCase().includes(searchLower) ||
-            s.academicYear.toLowerCase().includes(searchLower) ||
-            s.description?.toLowerCase().includes(searchLower)
-        );
-      }
+    console.log('🔵 [GET SYLLABUSES API] URL:', url);
+    console.log(
+      '🔵 [GET SYLLABUSES API] Full URL:',
+      `http://localhost:8000${url}`
+    );
 
-      // Apply pagination client-side
-      const pageNumber = request?.pageNumber || 1;
-      const pageSize = request?.pageSize || 100;
-      const startIndex = (pageNumber - 1) * pageSize;
-      const endIndex = startIndex + pageSize;
-      const paginatedItems = syllabuses.slice(startIndex, endIndex);
+    const response = await BaseRequest.Get<ApiResponse<PagedResult<any>>>(url);
 
-      return {
-        ...response,
-        data: {
-          items: paginatedItems,
-          totalCount: syllabuses.length,
-          pageNumber: pageNumber,
-          pageSize: pageSize,
-          totalPages: Math.ceil(syllabuses.length / pageSize),
-          hasPreviousPage: pageNumber > 1,
-          hasNextPage: endIndex < syllabuses.length
-        }
-      };
+    console.log('🔵 [GET SYLLABUSES API] Raw response:', response);
+    console.log('🔵 [GET SYLLABUSES API] Response success:', response?.success);
+    console.log('🔵 [GET SYLLABUSES API] Response data:', response?.data);
+
+    // Check if response.data is an array (Query Service returns array directly)
+    // or if it's a PagedResult object with items property
+    let rawItems: any[] = [];
+
+    if (Array.isArray(response?.data)) {
+      // Query Service returns array directly
+      rawItems = response.data;
+      console.log(
+        '🔵 [GET SYLLABUSES API] Data is array (Query Service format)'
+      );
+    } else if (response?.data?.items && Array.isArray(response.data.items)) {
+      // PagedResult format
+      rawItems = response.data.items;
+      console.log('🔵 [GET SYLLABUSES API] Data is PagedResult format');
     }
 
-    // Return empty result if no data
+    console.log('🔵 [GET SYLLABUSES API] Items count:', rawItems.length);
+    console.log(
+      '🔵 [GET SYLLABUSES API] Raw items (MongoDB format):',
+      rawItems
+    );
+
+    // Log first item details to check field names
+    if (rawItems.length > 0) {
+      console.log(
+        '🔍 [GET SYLLABUSES API] First item keys:',
+        Object.keys(rawItems[0])
+      );
+      console.log(
+        '🔍 [GET SYLLABUSES API] First item full:',
+        JSON.stringify(rawItems[0], null, 2)
+      );
+    }
+
+    // Map MongoDB response to frontend DTO format
+    if (rawItems.length > 0) {
+      const mappedItems = rawItems.map((item: MongoSyllabusResponse) =>
+        mapMongoResponseToDto(item)
+      );
+      console.log(
+        '🔄 [GET SYLLABUSES API] Mapped items (Frontend format):',
+        mappedItems
+      );
+
+      // Return in PagedResult format
+      return {
+        success: true,
+        message: response?.message || null,
+        data: {
+          items: mappedItems,
+          totalCount: rawItems.length,
+          pageNumber: request?.pageNumber || 1,
+          pageSize: request?.pageSize || 100,
+          totalPages: 1,
+          hasPreviousPage: false,
+          hasNextPage: false
+        }
+      } as ApiResponse<PagedResult<SyllabusDto>>;
+    }
+
+    // Return empty PagedResult
     return {
-      ...response,
+      success: true,
+      message: response?.message || null,
       data: {
         items: [],
         totalCount: 0,
-        pageNumber: request?.pageNumber || 1,
-        pageSize: request?.pageSize || 100,
+        pageNumber: 1,
+        pageSize: 100,
         totalPages: 0,
         hasPreviousPage: false,
         hasNextPage: false
       }
-    };
+    } as ApiResponse<PagedResult<SyllabusDto>>;
   } catch (error) {
-    console.error('Get All Syllabuses Error:', error);
+    console.error('❌ [GET SYLLABUSES API] Error:', error);
     throw error;
   }
 };
@@ -195,6 +348,26 @@ export const getSyllabusById = async (
   }
 };
 
+// Helper to convert semester enum to string for backend
+const getSemesterString = (semester: Semester): string => {
+  switch (semester) {
+    case Semester.HocKiI:
+      return 'HocKiI';
+    case Semester.HocKiII:
+      return 'HocKiII';
+    case Semester.GiuaHocKiI:
+      return 'GiuaHocKiI';
+    case Semester.GiuaHocKiII:
+      return 'GiuaHocKiII';
+    case Semester.CuoiHocKiI:
+      return 'CuoiHocKiI';
+    case Semester.CuoiHocKiII:
+      return 'CuoiHocKiII';
+    default:
+      return 'HocKiI';
+  }
+};
+
 /**
  * Create a new syllabus
  * Note: The Author (OwnerId) is automatically extracted from the JWT token by the backend
@@ -205,9 +378,17 @@ export const createSyllabus = async (
   data: CreateSyllabusRequest
 ): Promise<ApiResponse<string>> => {
   try {
+    // Convert semester enum to string for backend
+    const requestData = {
+      ...data,
+      semester: getSemesterString(data.semester)
+    };
+
+    console.log('📤 [CREATE SYLLABUS] Request data:', requestData);
+
     const response = await BaseRequest.Post<ApiResponse<string>>(
       '/api/v1/syllabus',
-      data
+      requestData
     );
     return response;
   } catch (error) {
@@ -227,13 +408,25 @@ export const updateSyllabus = async (
   data: UpdateSyllabusRequest
 ): Promise<ApiResponse<boolean>> => {
   try {
+    // Convert semester enum to string if present
+    const requestData =
+      data.semester !== undefined
+        ? { ...data, semester: getSemesterString(data.semester) }
+        : data;
+
+    console.log('📤 [UPDATE SYLLABUS] Request ID:', syllabusId);
+    console.log('📤 [UPDATE SYLLABUS] Request data:', requestData);
+
     const response = await BaseRequest.Put<ApiResponse<boolean>>(
       `/api/v1/syllabus/${syllabusId}`,
-      data
+      requestData
     );
+
+    console.log('✅ [UPDATE SYLLABUS] Response:', response);
+
     return response;
   } catch (error) {
-    console.error('Update Syllabus Error:', error);
+    console.error('❌ [UPDATE SYLLABUS] Error:', error);
     throw error;
   }
 };

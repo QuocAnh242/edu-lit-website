@@ -40,9 +40,9 @@ import {
   BookOpen,
   Edit,
   Trash2,
-  Eye,
   Loader2,
-  Search
+  Search,
+  AlertTriangle
 } from 'lucide-react';
 import {
   getCoursesBySyllabusId,
@@ -135,15 +135,15 @@ const CoursePage = () => {
     }
   }, [searchParams, setSearchParams]);
 
-  // Fetch syllabuses for dropdown
+  // Fetch syllabuses (which include courses) for both dropdown and course list
   const { data: syllabusesData, isLoading: loadingSyllabuses } = useQuery({
-    queryKey: ['syllabuses'],
+    queryKey: ['syllabuses-with-courses'],
     queryFn: async () => {
       try {
         const response = await getAllSyllabuses({
           pageNumber: 1,
           pageSize: 1000,
-          isActive: true
+          isActive: undefined // Get all to show courses from inactive syllabuses too
         });
         return response;
       } catch (error) {
@@ -167,121 +167,79 @@ const CoursePage = () => {
 
   const syllabuses = (syllabusesData?.data?.items || []) as SyllabusDto[];
 
-  // Fetch courses by getting all syllabuses first, then getting courses for each
-  // Since courses are nested under syllabuses in MongoDB, we need to aggregate them
-  const {
-    data: coursesData,
-    isLoading: loadingCourses,
-    isError: coursesError
-  } = useQuery({
-    queryKey: ['courses', searchTerm],
-    queryFn: async () => {
-      try {
-        // First, get all active syllabuses
-        const syllabusesResponse = await getAllSyllabuses({
-          pageNumber: 1,
-          pageSize: 1000,
-          isActive: true
-        });
+  // Extract all courses from syllabuses
+  const allCourses = (syllabusesData?.data?.items || []).flatMap(
+    (syllabus: any) =>
+      (syllabus.courses || []).map((course: any) => ({
+        id: course.courseId || course.course_id || '',
+        syllabusId: syllabus.id,
+        syllabusTitle: syllabus.title || '',
+        courseCode: course.courseCode || course.course_code || '',
+        title: course.title || '',
+        description: course.description || '',
+        orderIndex: course.orderIndex || course.order_index || 0,
+        durationWeeks: course.durationWeeks || course.duration_weeks || 0,
+        isActive: course.isActive ?? course.is_active ?? true,
+        createdAt: course.createdAt || course.created_at || '',
+        updatedAt: course.updatedAt || course.updated_at || ''
+      }))
+  );
 
-        if (
-          !syllabusesResponse.success ||
-          !syllabusesResponse.data ||
-          syllabusesResponse.data.items.length === 0
-        ) {
-          return {
-            success: true,
-            message: 'No syllabuses available',
-            data: {
-              items: [],
-              totalCount: 0,
-              pageNumber: 1,
-              pageSize: 100,
-              totalPages: 0,
-              hasPreviousPage: false,
-              hasNextPage: false
-            }
-          };
-        }
+  // Filter by search term
+  const courses = searchTerm
+    ? allCourses.filter(
+        (c: any) =>
+          c.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          c.courseCode?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          c.description?.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    : allCourses;
 
-        const allSyllabuses = (syllabusesResponse.data.items ||
-          []) as SyllabusDto[];
-
-        // Then, get courses for each syllabus and aggregate them
-        const allCourses: CourseDto[] = [];
-        for (const syllabus of allSyllabuses) {
-          try {
-            const coursesResponse = await getCoursesBySyllabusId(syllabus.id);
-            if (coursesResponse.success && coursesResponse.data) {
-              allCourses.push(...coursesResponse.data);
-            }
-          } catch (error) {
-            console.warn(
-              `Failed to fetch courses for syllabus ${syllabus.id}:`,
-              error
-            );
-            // Continue with other syllabuses even if one fails
-          }
-        }
-
-        // Apply client-side filtering if searchTerm is provided
-        let filteredCourses = allCourses;
-        if (searchTerm) {
-          const searchLower = searchTerm.toLowerCase();
-          filteredCourses = allCourses.filter(
-            (course) =>
-              course.title.toLowerCase().includes(searchLower) ||
-              course.courseCode.toLowerCase().includes(searchLower) ||
-              (course.description &&
-                course.description.toLowerCase().includes(searchLower))
-          );
-        }
-
-        return {
-          success: true,
-          message: 'Courses fetched successfully',
-          data: {
-            items: filteredCourses,
-            totalCount: filteredCourses.length,
-            pageNumber: 1,
-            pageSize: 100,
-            totalPages: 1,
-            hasPreviousPage: false,
-            hasNextPage: false
-          }
-        };
-      } catch (error: unknown) {
-        console.error('Error fetching courses:', error);
-        return {
-          success: true,
-          message: 'Failed to fetch courses',
-          data: {
-            items: [],
-            totalCount: 0,
-            pageNumber: 1,
-            pageSize: 100,
-            totalPages: 0,
-            hasPreviousPage: false,
-            hasNextPage: false
-          }
-        };
-      }
-    },
-    retry: 1,
-    staleTime: 5 * 60 * 1000 // Cache for 5 minutes
-  });
-
-  const courses = (coursesData?.data?.items || []) as CourseDto[];
+  const loadingCourses = false;
+  const coursesError = false;
 
   // Mutations
   const createCourseMutation = useMutation({
     mutationFn: async (data: CreateCourseRequest) => {
+      console.log('🔄 [CREATE COURSE] Sending request...', data);
       return await createCourse(data);
     },
-    onSuccess: () => {
-      toast.success('Course created successfully');
-      queryClient.invalidateQueries({ queryKey: ['courses'] });
-      queryClient.invalidateQueries({ queryKey: ['syllabuses'] }); // Invalidate to refresh course counts
+    onSuccess: async (data) => {
+      console.log('🎉 [CREATE COURSE SUCCESS] Course created!', data);
+
+      // Show success toast immediately
+      toast.success('Course created successfully! 🎉', {
+        duration: 3000,
+        position: 'top-center'
+      });
+
+      console.log(
+        '🔄 [CREATE COURSE SUCCESS] Waiting for CQRS event propagation...'
+      );
+
+      // Wait for event to propagate: Command Service → RabbitMQ → Query Service → MongoDB
+      // CQRS architecture with event sourcing can take up to 5 seconds
+      await new Promise((resolve) => setTimeout(resolve, 5000)); // 5 seconds delay
+
+      console.log('🔄 [CREATE COURSE SUCCESS] Refetching queries...');
+
+      // AWAIT refetch to ensure data is fresh before closing dialog
+      await queryClient.refetchQueries({
+        queryKey: ['syllabuses-with-courses'],
+        exact: false,
+        type: 'active'
+      });
+      await queryClient.refetchQueries({
+        queryKey: ['syllabuses'],
+        exact: false,
+        type: 'active'
+      });
+
+      console.log(
+        '✅ [CREATE COURSE SUCCESS] Refetch completed, data is fresh'
+      );
+
+      // Close dialog AFTER refetch completes
       setCourseDialogOpen(false);
       resetCourseForm();
     },
@@ -365,11 +323,42 @@ const CoursePage = () => {
       id: string;
       data: UpdateCourseRequest;
     }) => {
+      console.log('🔄 [UPDATE COURSE] Sending request...', { id, data });
       return await updateCourse(id, data);
     },
-    onSuccess: () => {
-      toast.success('Course updated successfully');
-      queryClient.invalidateQueries({ queryKey: ['courses'] });
+    onSuccess: async (data) => {
+      console.log('🎉 [UPDATE COURSE SUCCESS] Course updated!', data);
+
+      // Show success toast immediately
+      toast.success('Course updated successfully! ✅', {
+        duration: 3000,
+        position: 'top-center'
+      });
+
+      console.log(
+        '🔄 [UPDATE COURSE SUCCESS] Waiting for CQRS event propagation...'
+      );
+
+      // Wait for event to propagate
+      await new Promise((resolve) => setTimeout(resolve, 5000)); // 5 seconds delay
+
+      console.log('🔄 [UPDATE COURSE SUCCESS] Refetching queries...');
+
+      // AWAIT refetch to ensure data is fresh
+      await queryClient.refetchQueries({
+        queryKey: ['syllabuses-with-courses'],
+        exact: false,
+        type: 'active'
+      });
+      await queryClient.refetchQueries({
+        queryKey: ['syllabuses'],
+        exact: false,
+        type: 'active'
+      });
+
+      console.log('✅ [UPDATE COURSE SUCCESS] Refetch completed');
+
+      // Close dialog AFTER refetch
       setCourseDialogOpen(false);
       setEditingCourse(null);
       resetCourseForm();
@@ -423,11 +412,42 @@ const CoursePage = () => {
 
   const deleteCourseMutation = useMutation({
     mutationFn: async (courseId: string) => {
+      console.log('🔄 [DELETE COURSE] Sending request...', courseId);
       return await deleteCourse(courseId);
     },
-    onSuccess: () => {
-      toast.success('Course deleted successfully');
-      queryClient.invalidateQueries({ queryKey: ['courses'] });
+    onSuccess: async (data) => {
+      console.log('🎉 [DELETE COURSE SUCCESS] Course deleted!', data);
+
+      // Show success toast immediately
+      toast.success('Course deleted successfully! 🗑️', {
+        duration: 3000,
+        position: 'top-center'
+      });
+
+      console.log(
+        '🔄 [DELETE COURSE SUCCESS] Waiting for CQRS event propagation...'
+      );
+
+      // Wait for event to propagate
+      await new Promise((resolve) => setTimeout(resolve, 5000)); // 5 seconds delay
+
+      console.log('🔄 [DELETE COURSE SUCCESS] Refetching queries...');
+
+      // AWAIT refetch to ensure data is fresh
+      await queryClient.refetchQueries({
+        queryKey: ['syllabuses-with-courses'],
+        exact: false,
+        type: 'active'
+      });
+      await queryClient.refetchQueries({
+        queryKey: ['syllabuses'],
+        exact: false,
+        type: 'active'
+      });
+
+      console.log('✅ [DELETE COURSE SUCCESS] Refetch completed');
+
+      // Close dialog AFTER refetch
       setDeleteDialogOpen(false);
       setCourseToDelete(null);
     },
@@ -437,7 +457,10 @@ const CoursePage = () => {
           ?.data?.message ||
         (error as { message?: string })?.message ||
         'Failed to delete course';
-      toast.error(errorMessage);
+      toast.error(errorMessage, {
+        duration: 5000
+      });
+      console.error('❌ [DELETE COURSE ERROR]', error);
     }
   });
 
@@ -467,22 +490,6 @@ const CoursePage = () => {
   const handleViewCourse = async (course: CourseDto) => {
     // Navigate to sessions page for this course
     navigate(`/course/${course.id}/sessions`);
-  };
-
-  const handleViewCourseDetails = async (course: CourseDto) => {
-    try {
-      // Fetch full course details
-      const response = await getCourseById(course.id);
-      if (response.success && response.data) {
-        setViewingCourse(response.data);
-        setViewDialogOpen(true);
-      } else {
-        toast.error('Failed to load course details');
-      }
-    } catch (error) {
-      console.error('Error fetching course details:', error);
-      toast.error('Failed to load course details');
-    }
   };
 
   const validateCourseForm = (): {
@@ -553,6 +560,15 @@ const CoursePage = () => {
       title: courseForm.title.trim(),
       description: courseForm.description?.trim() || ''
     };
+
+    console.log('📋 [FORM DATA] Before trim:', {
+      courseCode: `"${courseForm.courseCode}"`,
+      length: courseForm.courseCode.length
+    });
+    console.log('📋 [DATA TO SEND] After trim:', {
+      courseCode: `"${dataToSend.courseCode}"`,
+      length: dataToSend.courseCode.length
+    });
 
     // For creation, check if a course with the same CourseCode in the same Syllabus already exists
     if (!editingCourse) {
@@ -757,7 +773,7 @@ const CoursePage = () => {
                       <TableHead className="w-[25%]">Title</TableHead>
                       <TableHead>Course Code</TableHead>
                       <TableHead>Description</TableHead>
-                      <TableHead>Syllabus ID</TableHead>
+                      <TableHead>Syllabus</TableHead>
                       <TableHead>Created</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
@@ -784,8 +800,9 @@ const CoursePage = () => {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <div className="font-mono text-xs text-gray-500">
-                            {course.syllabusId.substring(0, 8)}...
+                          <div className="text-sm text-gray-700">
+                            {(course as any).syllabusTitle ||
+                              'Unknown Syllabus'}
                           </div>
                         </TableCell>
                         <TableCell className="text-sm text-gray-500">
@@ -803,15 +820,6 @@ const CoursePage = () => {
                               title="Manage sessions"
                             >
                               <BookOpen className="h-4 w-4 text-purple-600" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleViewCourseDetails(course)}
-                              className="transition-all duration-200 hover:scale-110 hover:bg-blue-50"
-                              title="View course details"
-                            >
-                              <Eye className="h-4 w-4 text-blue-600" />
                             </Button>
                             <Button
                               variant="ghost"
@@ -951,7 +959,8 @@ const CoursePage = () => {
                 />
                 {formErrors.title && (
                   <p className="flex items-center gap-1 text-sm text-red-600">
-                    <span>⚠</span> {formErrors.title}
+                    <AlertTriangle className="h-4 w-4" />
+                    {formErrors.title}
                   </p>
                 )}
                 {!formErrors.title && courseForm.title && (
@@ -980,7 +989,8 @@ const CoursePage = () => {
                 />
                 {formErrors.courseCode && (
                   <p className="flex items-center gap-1 text-sm text-red-600">
-                    <span>⚠</span> {formErrors.courseCode}
+                    <AlertTriangle className="h-4 w-4" />
+                    {formErrors.courseCode}
                   </p>
                 )}
                 {!formErrors.courseCode && courseForm.courseCode && (
@@ -1056,7 +1066,8 @@ const CoursePage = () => {
                 </Select>
                 {formErrors.syllabusId && (
                   <p className="flex items-center gap-1 text-sm text-red-600">
-                    <span>⚠</span> {formErrors.syllabusId}
+                    <AlertTriangle className="h-4 w-4" />
+                    {formErrors.syllabusId}
                   </p>
                 )}
                 {syllabuses.length === 0 &&
@@ -1089,7 +1100,8 @@ const CoursePage = () => {
                 />
                 {formErrors.description && (
                   <p className="flex items-center gap-1 text-sm text-red-600">
-                    <span>⚠</span> {formErrors.description}
+                    <AlertTriangle className="h-4 w-4" />
+                    {formErrors.description}
                   </p>
                 )}
                 {!formErrors.description && courseForm.description && (
@@ -1126,7 +1138,13 @@ const CoursePage = () => {
                   updateCourseMutation.isPending) && (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 )}
-                {editingCourse ? 'Update' : 'Create'}
+                {createCourseMutation.isPending
+                  ? 'Creating...'
+                  : updateCourseMutation.isPending
+                    ? 'Updating...'
+                    : editingCourse
+                      ? 'Update'
+                      : 'Create'}
               </Button>
             </DialogFooter>
           </DialogContent>

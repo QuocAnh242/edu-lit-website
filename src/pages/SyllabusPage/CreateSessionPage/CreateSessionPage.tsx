@@ -21,44 +21,86 @@ import {
   generateId,
   getLessonById
 } from '@/utils/lesson-storage';
+import { createSession, CreateSessionRequest } from '@/services/session.api';
+import {
+  createLessonContext,
+  CreateLessonContextRequest
+} from '@/services/lessoncontext.api';
+import { createActivity, CreateActivityRequest } from '@/services/activity.api';
+import { toast as sonnerToast } from 'sonner';
 
 export default function CreateSessionPage() {
   const navigate = useNavigate();
   const { lessonId } = useParams();
   const { toast } = useToast();
 
-  // Form state
+  // Form state - theo đúng API structure
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [slotNumber, setSlotNumber] = useState<number>(1);
-  const [weekNumber, setWeekNumber] = useState<number>(1);
+  const [position, setPosition] = useState<number>(0);
+  const [durationMinutes, setDurationMinutes] = useState<number>(45);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Lesson Contexts (lesson_context table) - 3 level structure
+  // Lesson Contexts (lesson_context table) - 3 level structure with dynamic subsections
   const [lessonContexts, setLessonContexts] = useState([
     {
       id: 1,
       mainTitle: 'I. MỤC TIÊU', // Level 1
       subSections: [
-        { id: 1, title: '1. Kiến thức:', content: '' },
-        { id: 2, title: '2. Năng lực:', content: '' },
-        { id: 3, title: '3. Phẩm chất:', content: '' }
+        {
+          id: 1,
+          title: '1. Kiến thức:',
+          content: '',
+          subSubSections: [] // Level 3
+        },
+        {
+          id: 2,
+          title: '2. Năng lực:',
+          content: '',
+          subSubSections: []
+        },
+        {
+          id: 3,
+          title: '3. Phẩm chất:',
+          content: '',
+          subSubSections: []
+        }
       ]
     },
     {
       id: 2,
       mainTitle: 'II. THIẾT BỊ DẠY HỌC VÀ HỌC LIỆU', // Level 1
       subSections: [
-        { id: 1, title: '1. Chuẩn bị của giáo viên:', content: '' },
-        { id: 2, title: '2. Chuẩn bị của học sinh:', content: '' }
+        {
+          id: 1,
+          title: '1. Chuẩn bị của giáo viên:',
+          content: '',
+          subSubSections: []
+        },
+        {
+          id: 2,
+          title: '2. Chuẩn bị của học sinh:',
+          content: '',
+          subSubSections: []
+        }
       ]
     },
     {
       id: 3,
       mainTitle: 'III. TIẾN TRÌNH CÁC HOẠT ĐỘNG DẠY HỌC', // Level 1
       subSections: [
-        { id: 1, title: 'A. HOẠT ĐỘNG KHỞI ĐỘNG', content: '' },
-        { id: 2, title: 'B. HOẠT ĐỘNG HÌNH THÀNH KIẾN THỨC MỚI', content: '' }
+        {
+          id: 1,
+          title: 'A. HOẠT ĐỘNG KHỞI ĐỘNG',
+          content: '',
+          subSubSections: []
+        },
+        {
+          id: 2,
+          title: 'B. HOẠT ĐỘNG HÌNH THÀNH KIẾN THỨC MỚI',
+          content: '',
+          subSubSections: []
+        }
       ]
     }
   ]);
@@ -105,7 +147,38 @@ export default function CreateSessionPage() {
     );
   };
 
-  // Add new subsection
+  // Update sub-subsection (Level 3)
+  const updateSubSubSection = (
+    mainId: number,
+    subId: number,
+    subSubId: number,
+    field: 'title' | 'content',
+    value: string
+  ) => {
+    setLessonContexts(
+      lessonContexts.map((lc) =>
+        lc.id === mainId
+          ? {
+              ...lc,
+              subSections: lc.subSections.map((sub) =>
+                sub.id === subId
+                  ? {
+                      ...sub,
+                      subSubSections: sub.subSubSections.map((subSub: any) =>
+                        subSub.id === subSubId
+                          ? { ...subSub, [field]: value }
+                          : subSub
+                      )
+                    }
+                  : sub
+              )
+            }
+          : lc
+      )
+    );
+  };
+
+  // Add new subsection (Level 2)
   const addSubSection = (mainId: number) => {
     const newSubId =
       Math.max(
@@ -121,7 +194,7 @@ export default function CreateSessionPage() {
               ...lc,
               subSections: [
                 ...lc.subSections,
-                { id: newSubId, title: '', content: '' }
+                { id: newSubId, title: '', content: '', subSubSections: [] }
               ]
             }
           : lc
@@ -129,7 +202,7 @@ export default function CreateSessionPage() {
     );
   };
 
-  // Remove subsection
+  // Remove subsection (Level 2)
   const removeSubSection = (mainId: number, subId: number) => {
     setLessonContexts(
       lessonContexts.map((lc) =>
@@ -137,6 +210,65 @@ export default function CreateSessionPage() {
           ? {
               ...lc,
               subSections: lc.subSections.filter((sub) => sub.id !== subId)
+            }
+          : lc
+      )
+    );
+  };
+
+  // Add new sub-subsection (Level 3)
+  const addSubSubSection = (mainId: number, subId: number) => {
+    const newSubSubId =
+      Math.max(
+        ...(lessonContexts
+          .find((lc) => lc.id === mainId)
+          ?.subSections.find((s) => s.id === subId)
+          ?.subSubSections.map((s: any) => s.id) || [0]),
+        0
+      ) + 1;
+    setLessonContexts(
+      lessonContexts.map((lc) =>
+        lc.id === mainId
+          ? {
+              ...lc,
+              subSections: lc.subSections.map((sub) =>
+                sub.id === subId
+                  ? {
+                      ...sub,
+                      subSubSections: [
+                        ...sub.subSubSections,
+                        { id: newSubSubId, title: '', content: '' }
+                      ]
+                    }
+                  : sub
+              )
+            }
+          : lc
+      )
+    );
+  };
+
+  // Remove sub-subsection (Level 3)
+  const removeSubSubSection = (
+    mainId: number,
+    subId: number,
+    subSubId: number
+  ) => {
+    setLessonContexts(
+      lessonContexts.map((lc) =>
+        lc.id === mainId
+          ? {
+              ...lc,
+              subSections: lc.subSections.map((sub) =>
+                sub.id === subId
+                  ? {
+                      ...sub,
+                      subSubSections: sub.subSubSections.filter(
+                        (subSub: any) => subSub.id !== subSubId
+                      )
+                    }
+                  : sub
+              )
             }
           : lc
       )
@@ -182,21 +314,26 @@ export default function CreateSessionPage() {
 
     // Validation
     if (!title.trim()) {
-      toast({
-        title: 'Error',
-        description: 'Session title is required',
-        variant: 'destructive'
-      });
+      sonnerToast.error('Session title is required');
       return;
     }
 
-    // Validate slot/week numbers
-    if (slotNumber < 1 || weekNumber < 1) {
-      toast({
-        title: 'Error',
-        description: 'Slot and week numbers must be positive',
-        variant: 'destructive'
-      });
+    // Validate Position
+    if (position < 0) {
+      sonnerToast.error('Position must be greater than or equal to 0');
+      return;
+    }
+
+    // Validate Duration Minutes (1 tiết học tối thiểu 30 phút)
+    if (durationMinutes < 30) {
+      sonnerToast.error(
+        'Duration must be at least 30 minutes (minimum for one class period)'
+      );
+      return;
+    }
+
+    if (durationMinutes > 180) {
+      sonnerToast.error('Duration cannot exceed 180 minutes (3 hours maximum)');
       return;
     }
 
@@ -204,15 +341,17 @@ export default function CreateSessionPage() {
     const validContexts = lessonContexts.filter(
       (lc) =>
         lc.mainTitle.trim() &&
-        lc.subSections.some((sub) => sub.title.trim() && sub.content.trim())
+        lc.subSections.some((sub) => {
+          // Level 2 is valid if it has title and (content OR has Level 3 items)
+          const hasContent =
+            sub.title.trim() &&
+            (sub.content.trim() ||
+              (sub.subSubSections && sub.subSubSections.length > 0));
+          return hasContent;
+        })
     );
     if (validContexts.length === 0) {
-      toast({
-        title: 'Error',
-        description:
-          'At least one complete lesson context (with main title and subsections) is required',
-        variant: 'destructive'
-      });
+      sonnerToast.error('At least one complete lesson context is required');
       return;
     }
 
@@ -226,86 +365,164 @@ export default function CreateSessionPage() {
         a.expectedOutcome.trim()
     );
     if (validActivities.length === 0) {
-      toast({
-        title: 'Error',
-        description:
-          'At least one complete activity (with at least one step and expected outcomes) is required',
-        variant: 'destructive'
-      });
+      sonnerToast.error('At least one complete activity is required');
       return;
     }
 
     setIsSubmitting(true);
+    sonnerToast.loading(
+      'Creating session with lesson contexts and activities...'
+    );
 
     try {
-      // Uniqueness check: Slot+Week must be unique within a lesson
-      const lesson = getLessonById(lessonId || '');
-      const isDuplicate = (lesson?.sessions || []).some((s) => {
-        const d = s.duration || '';
-        const mSlot = d.match(/Slot\s*(\d+)/i);
-        const mWeek = d.match(/Week\s*(\d+)/i);
-        const slotVal = mSlot ? parseInt(mSlot[1]) : undefined;
-        const weekVal = mWeek ? parseInt(mWeek[1]) : undefined;
-        return slotVal === slotNumber && weekVal === weekNumber;
-      });
-
-      if (isDuplicate) {
-        toast({
-          title: 'Duplicate Slot/Week',
-          description:
-            'Another session in this lesson already uses this Slot and Week.',
-          variant: 'destructive'
-        });
-        setIsSubmitting(false);
-        return;
-      }
-
-      // Create duration string from slot/week information
-      const durationString = `Slot ${slotNumber}, Week ${weekNumber}`;
-
-      // Create new session object with AlternativeLessonPlan structure
-      const newSession = {
-        id: generateId('session'),
+      // 1. Create Session first
+      const sessionData: CreateSessionRequest = {
+        courseId: lessonId || '', // lessonId is actually courseId in this context
         title: title.trim(),
         description: description.trim(),
-        duration: durationString,
-        createdAt: new Date().toISOString(),
-        lessonPlans: [], // Empty standard lesson plans
-        alternativeLessonPlans: [
-          {
-            id: generateId('alt-lp'),
-            title: title.trim(),
-            week: 0, // Can be set later
-            lessonNumber: 0, // Can be set later
-            period: 0, // Can be set later
-            createdAt: new Date().toISOString(),
-            lessonContexts: validContexts,
-            activities: validActivities
-          }
-        ]
+        position: position,
+        durationMinutes: durationMinutes
       };
 
-      // Save to localStorage
-      addSessionToLesson(lessonId || '', newSession);
+      const sessionResponse = await createSession(sessionData);
+      const sessionId = sessionResponse.data;
 
-      // Mock delay for better UX
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      if (!sessionId) {
+        throw new Error('Failed to create session - no ID returned');
+      }
 
-      toast({
-        title: 'Success',
-        description: 'Session created successfully!',
-        className: 'bg-green-50 border-green-200'
-      });
+      sonnerToast.success('Session created! Creating lesson contexts...');
 
-      // Navigate back to syllabus list
-      navigate('/syllabus');
+      // Wait for CQRS event propagation
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+
+      // 2. Create Lesson Contexts with proper hierarchy (Level 1, 2, 3)
+      const createdContextIds: string[] = [];
+      for (let i = 0; i < validContexts.length; i++) {
+        const context = validContexts[i];
+
+        // Create Level 1 - Main Title (I, II, III)
+        const mainContextData: CreateLessonContextRequest = {
+          sessionId: sessionId,
+          parentLessonId: undefined,
+          lessonTitle: context.mainTitle,
+          lessonContent: '', // Level 1 không có content, chỉ là header
+          position: i + 1,
+          level: 1
+        };
+
+        const mainContextResponse = await createLessonContext(mainContextData);
+        const mainContextId = mainContextResponse.data;
+
+        if (mainContextId) {
+          createdContextIds.push(mainContextId);
+
+          // Create Level 2 - SubSections (1, 2, 3) with parentId
+          for (let j = 0; j < context.subSections.length; j++) {
+            const subSection = context.subSections[j];
+
+            const subContextData: CreateLessonContextRequest = {
+              sessionId: sessionId,
+              parentLessonId: mainContextId, // Link to parent Level 1
+              lessonTitle: subSection.title,
+              lessonContent: subSection.content,
+              position: j + 1,
+              level: 2
+            };
+
+            const subContextResponse =
+              await createLessonContext(subContextData);
+            const subContextId = subContextResponse.data;
+
+            // Create Level 3 - Sub-SubSections (a, b, c) if exists
+            if (
+              subContextId &&
+              subSection.subSubSections &&
+              subSection.subSubSections.length > 0
+            ) {
+              for (let k = 0; k < subSection.subSubSections.length; k++) {
+                const subSubSection = subSection.subSubSections[k];
+
+                const subSubContextData: CreateLessonContextRequest = {
+                  sessionId: sessionId,
+                  parentLessonId: subContextId, // Link to parent Level 2
+                  lessonTitle: subSubSection.title,
+                  lessonContent: subSubSection.content,
+                  position: k + 1,
+                  level: 3
+                };
+
+                await createLessonContext(subSubContextData);
+
+                // Small delay between sub-subsection creations
+                await new Promise((resolve) => setTimeout(resolve, 300));
+              }
+            }
+
+            // Small delay between subsection creations
+            await new Promise((resolve) => setTimeout(resolve, 500));
+          }
+        }
+
+        // Small delay between main context creations
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+
+      sonnerToast.success(
+        `${createdContextIds.length} main contexts with subsections created! Creating activities...`
+      );
+
+      // Wait for CQRS event propagation
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+
+      // 3. Create Activities (link to first lesson context)
+      const firstContextId = createdContextIds[0];
+      if (firstContextId) {
+        for (let i = 0; i < validActivities.length; i++) {
+          const activity = validActivities[i];
+
+          const teacherStudentActivities = [
+            activity.step1 && `Step 1: ${activity.step1}`,
+            activity.step2 && `Step 2: ${activity.step2}`,
+            activity.step3 && `Step 3: ${activity.step3}`,
+            activity.step4 && `Step 4: ${activity.step4}`
+          ]
+            .filter(Boolean)
+            .join('\n\n');
+
+          // Combine both for description, but truncate if too long
+          const fullDescription = `Teacher-Student Activities: ${teacherStudentActivities}\n\nExpected Outcomes: ${activity.expectedOutcome}`;
+          const description =
+            fullDescription.length > 1000
+              ? fullDescription.substring(0, 997) + '...'
+              : fullDescription;
+
+          const activityData: CreateActivityRequest = {
+            sessionId: sessionId,
+            title: `Activity ${i + 1}`,
+            description: description,
+            activityType: 'LESSON_ACTIVITY',
+            content: teacherStudentActivities,
+            position: i + 1
+          };
+
+          console.log('🔵 [CREATE ACTIVITY] Data:', activityData);
+          await createActivity(activityData);
+
+          // Small delay between activity creations
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
+      }
+
+      sonnerToast.success(
+        '🎉 Session, lesson contexts, and activities created successfully!'
+      );
+
+      // Navigate back to sessions page
+      navigate(`/course/${lessonId}/sessions`);
     } catch (error) {
       console.error('Error creating session:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to create session. Please try again.',
-        variant: 'destructive'
-      });
+      sonnerToast.error('Failed to create session. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -387,44 +604,46 @@ export default function CreateSessionPage() {
               {/* Slot and Week */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label
-                    htmlFor="slotNumber"
-                    className="text-base font-semibold"
-                  >
-                    Slot Number *
+                  <Label htmlFor="position" className="text-base font-semibold">
+                    Position *
                   </Label>
                   <Input
-                    id="slotNumber"
+                    id="position"
                     type="number"
-                    min="1"
-                    placeholder="1"
-                    value={slotNumber}
-                    onChange={(e) =>
-                      setSlotNumber(parseInt(e.target.value) || 1)
-                    }
+                    min="0"
+                    placeholder="0"
+                    value={position}
+                    onChange={(e) => setPosition(parseInt(e.target.value) || 0)}
                     className="text-base"
                     required
                   />
+                  <p className="text-sm text-slate-500">
+                    Order of session in the course (0 = first session)
+                  </p>
                 </div>
                 <div className="space-y-2">
                   <Label
-                    htmlFor="weekNumber"
+                    htmlFor="durationMinutes"
                     className="text-base font-semibold"
                   >
-                    Week Number *
+                    Duration (minutes) *
                   </Label>
                   <Input
-                    id="weekNumber"
+                    id="durationMinutes"
                     type="number"
-                    min="1"
-                    placeholder="1"
-                    value={weekNumber}
+                    min="30"
+                    max="180"
+                    placeholder="45"
+                    value={durationMinutes}
                     onChange={(e) =>
-                      setWeekNumber(parseInt(e.target.value) || 1)
+                      setDurationMinutes(parseInt(e.target.value) || 45)
                     }
                     className="text-base"
                     required
                   />
+                  <p className="text-sm text-slate-500">
+                    Standard class period: 30-45 minutes (max 180 minutes)
+                  </p>
                 </div>
               </div>
             </CardContent>
@@ -531,7 +750,7 @@ export default function CreateSessionPage() {
 
                           <div>
                             <Label className="text-sm font-semibold">
-                              Content *
+                              Content
                             </Label>
                             <Textarea
                               placeholder="Describe the content for this subsection..."
@@ -549,6 +768,100 @@ export default function CreateSessionPage() {
                             />
                           </div>
                         </div>
+
+                        {/* Level 3 - Sub-SubSections */}
+                        {sub.subSubSections &&
+                          sub.subSubSections.length > 0 && (
+                            <div className="mt-4 space-y-3 border-l-2 border-green-300 pl-4">
+                              <Label className="text-xs font-semibold text-green-700">
+                                Sub-Items (Level 3)
+                              </Label>
+                              {sub.subSubSections.map(
+                                (subSub: any, subSubIndex: number) => (
+                                  <div
+                                    key={subSub.id}
+                                    className="space-y-2 rounded-lg border border-green-200 bg-green-50 p-3"
+                                  >
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-xs font-semibold text-green-800">
+                                        Sub-Item {subSubIndex + 1}
+                                      </span>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() =>
+                                          removeSubSubSection(
+                                            context.id,
+                                            sub.id,
+                                            subSub.id
+                                          )
+                                        }
+                                        className="h-6 text-red-600 hover:bg-red-50 hover:text-red-700"
+                                      >
+                                        <Trash2 className="h-3 w-3" />
+                                      </Button>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                                      <div>
+                                        <Label className="text-xs">
+                                          Title *
+                                        </Label>
+                                        <Input
+                                          placeholder="e.g., a. Kiến thức nhỏ..."
+                                          value={subSub.title}
+                                          onChange={(e) =>
+                                            updateSubSubSection(
+                                              context.id,
+                                              sub.id,
+                                              subSub.id,
+                                              'title',
+                                              e.target.value
+                                            )
+                                          }
+                                          className="mt-1 h-8 text-sm"
+                                        />
+                                      </div>
+
+                                      <div>
+                                        <Label className="text-xs">
+                                          Content
+                                        </Label>
+                                        <Textarea
+                                          placeholder="Content..."
+                                          value={subSub.content}
+                                          onChange={(e) =>
+                                            updateSubSubSection(
+                                              context.id,
+                                              sub.id,
+                                              subSub.id,
+                                              'content',
+                                              e.target.value
+                                            )
+                                          }
+                                          rows={2}
+                                          className="mt-1 text-sm"
+                                        />
+                                      </div>
+                                    </div>
+                                  </div>
+                                )
+                              )}
+                            </div>
+                          )}
+
+                        {/* Add Sub-SubSection Button */}
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => addSubSubSection(context.id, sub.id)}
+                          className="mt-2 w-full border-green-300 text-green-600 hover:bg-green-50 hover:text-green-700"
+                        >
+                          <Plus className="mr-1 h-3 w-3" />
+                          Add Sub-Item (a, b, c...)
+                        </Button>
                       </div>
                     ))}
                   </div>
@@ -798,7 +1111,7 @@ Example: I/ Overview of Vietnamese Literature from August Revolution 1945-1975:
                       Time:
                     </span>
                     <p className="text-slate-700">
-                      Slot {slotNumber}, Week {weekNumber}
+                      Position {position}, Duration {durationMinutes} minutes
                     </p>
                   </div>
                 </div>

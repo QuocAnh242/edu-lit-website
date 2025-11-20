@@ -48,6 +48,12 @@ const ViewSessionPage = lazy(
 );
 const SessionsPage = lazy(() => import('@/pages/SessionsPage'));
 const LessonContextPage = lazy(() => import('@/pages/LessonContext'));
+const LessonContextsPage = lazy(
+  () => import('@/pages/LessonContextsPage/LessonContextsPage')
+);
+const ActivitiesPage = lazy(
+  () => import('@/pages/ActivitiesPage/ActivitiesPage')
+);
 // ----------------------------------------------------------------------
 
 export default function AppRouter() {
@@ -216,10 +222,34 @@ export default function AppRouter() {
           )
         },
         {
+          path: '/courses/:lessonId/sessions/:sessionId/edit',
+          element: (
+            <Suspense fallback={<div>Loading...</div>}>
+              <EditSessionPage />
+            </Suspense>
+          )
+        },
+        {
           path: '/session/:sessionId/lesson-contexts',
           element: (
             <Suspense fallback={<div>Loading...</div>}>
               <LessonContextPage />
+            </Suspense>
+          )
+        },
+        {
+          path: '/session/:sessionId/lessoncontexts',
+          element: (
+            <Suspense fallback={<div>Loading...</div>}>
+              <LessonContextsPage />
+            </Suspense>
+          )
+        },
+        {
+          path: '/lessoncontext/:lessonContextId/activities',
+          element: (
+            <Suspense fallback={<div>Loading...</div>}>
+              <ActivitiesPage />
             </Suspense>
           )
         }
