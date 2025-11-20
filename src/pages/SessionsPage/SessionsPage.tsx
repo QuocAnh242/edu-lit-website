@@ -58,11 +58,16 @@ import {
 } from '@/services/session.api';
 import { getCourseById, CourseDto } from '@/services/course.api';
 import { getAllSyllabuses } from '@/services/syllabus.api';
+import __helpers from '@/helpers';
 
 export default function SessionsPage() {
   const navigate = useNavigate();
   const { courseId } = useParams<{ courseId: string }>();
   const queryClient = useQueryClient();
+
+  // Get user role
+  const userRole = __helpers.getUserRole();
+  const canCreateSession = userRole === 'TEACHER' || userRole === 'ADMIN';
 
   // State
   const [sessionDialogOpen, setSessionDialogOpen] = useState(false);
@@ -434,13 +439,15 @@ export default function SessionsPage() {
                   </p>
                 )}
               </div>
-              <Button
-                onClick={handleCreateSession}
-                className="gap-2 bg-gradient-to-r from-purple-600 to-pink-600 shadow-lg transition-all duration-300 hover:scale-105 hover:from-purple-700 hover:to-pink-700 hover:shadow-xl"
-              >
-                <Plus className="h-5 w-5" />
-                Create Session
-              </Button>
+              {canCreateSession && (
+                <Button
+                  onClick={handleCreateSession}
+                  className="gap-2 bg-gradient-to-r from-purple-600 to-pink-600 shadow-lg transition-all duration-300 hover:scale-105 hover:from-purple-700 hover:to-pink-700 hover:shadow-xl"
+                >
+                  <Plus className="h-5 w-5" />
+                  Create Session
+                </Button>
+              )}
             </div>
           </div>
 
@@ -522,7 +529,7 @@ export default function SessionsPage() {
                       ? 'No sessions found matching your search.'
                       : 'Get started by creating your first session'}
                   </p>
-                  {!searchTerm && (
+                  {!searchTerm && canCreateSession && (
                     <Button onClick={handleCreateSession} className="gap-2">
                       <Plus className="h-4 w-4" />
                       Create First Session
