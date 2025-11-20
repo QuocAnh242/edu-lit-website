@@ -1,0 +1,58 @@
+/* CreateQuestionPage Styles */
+
+.create-question-page {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Smooth transitions for form elements */
+.create-question-page input,
+.create-question-page textarea,
+.create-question-page select {
+  transition: all 0.2s ease;
+}
+
+.create-question-page input:focus,
+.create-question-page textarea:focus,
+.create-question-page select:focus {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+/* Custom scrollbar for textarea */
+.create-question-page textarea::-webkit-scrollbar {
+  width: 8px;
+}
+
+.create-question-page textarea::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.create-question-page textarea::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.create-question-page textarea::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Option item hover effect */
+.option-item {
+  transition: all 0.2s ease;
+}
+
+.option-item:hover {
+  transform: translateX(4px);
+}

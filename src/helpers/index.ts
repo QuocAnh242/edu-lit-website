@@ -100,31 +100,34 @@ class helpers {
     const token = this.cookie_get('AT');
     if (!token) return '';
     const userDetail = this.decodeToken(token);
-    return userDetail.Role;
+    // JWT claim for role is stored in "http://schemas.microsoft.com/ws/2008/06/identity/claims/role"
+    return (
+      userDetail[
+        'http://schemas.microsoft.com/ws/2008/06/identity/claims/role'
+      ] ||
+      userDetail.role ||
+      ''
+    );
   }
+
   getUserId() {
     const token = this.cookie_get('AT');
     if (!token) return '';
     const userDetail = this.decodeToken(token);
-    return userDetail.UserId;
+    // JWT claim for user ID is stored in "sub" (standard JWT claim)
+    return userDetail.sub || userDetail.UserId || '';
   }
 
   isAdminRole() {
     return this.getUserRole() === 'ADMIN';
   }
 
-  getUserId() {
-    const token = this.cookie_get('AT');
-    if (!token) return '';
-    const userDetail = this.decodeToken(token);
-    return userDetail.UserId;
-  }
-
   getUserEmail() {
     const token = this.cookie_get('AT');
     if (!token) return '';
     const userDetail = this.decodeToken(token);
-    return userDetail.email;
+    // JWT claim for email is stored in "email"
+    return userDetail.email || '';
   }
 
   isPathAllowed = (navItems: any, path: string): boolean => {
