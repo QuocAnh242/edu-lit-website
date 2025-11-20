@@ -67,6 +67,8 @@ import {
   SelectValue
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { GraduationCap, Eye } from 'lucide-react';
+import __helpers from '@/helpers';
 
 const CoursePage = () => {
   const navigate = useNavigate();
@@ -81,6 +83,13 @@ const CoursePage = () => {
   const [viewingCourse, setViewingCourse] = useState<CourseDto | null>(null);
   const [courseToDelete, setCourseToDelete] = useState<CourseDto | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Get user role
+  const userRole = __helpers.getUserRole();
+  const isTeacher = () => {
+    return userRole === 'ADMIN' || userRole === 'TEACHER';
+  };
+
   const [courseForm, setCourseForm] = useState<CreateCourseRequest>({
     syllabusId: '',
     courseCode: '',
@@ -675,14 +684,29 @@ const CoursePage = () => {
                 Manage your courses and learning materials
               </p>
             </div>
-            <Button
-              onClick={handleCreateCourse}
-              className="gap-2 bg-gradient-to-r from-cyan-600 to-blue-600 shadow-lg transition-all duration-300 hover:scale-105 hover:from-cyan-700 hover:to-blue-700 hover:shadow-xl"
-            >
-              <Plus className="h-5 w-5" />
-              Create Course
-            </Button>
+            {isTeacher() && (
+              <Button
+                onClick={handleCreateCourse}
+                className="gap-2 bg-gradient-to-r from-cyan-600 to-blue-600 shadow-lg transition-all duration-300 hover:scale-105 hover:from-cyan-700 hover:to-blue-700 hover:shadow-xl"
+              >
+                <Plus className="h-5 w-5" />
+                Create Course
+              </Button>
+            )}
           </div>
+
+          {/* Role Badge */}
+          {!isTeacher() && (
+            <div className="mb-6 flex items-center gap-4">
+              <Badge
+                variant="secondary"
+                className="border-green-300 bg-green-100 text-base text-green-800 transition-all duration-200 hover:scale-105"
+              >
+                <GraduationCap className="mr-1 h-4 w-4" />
+                Student View
+              </Badge>
+            </div>
+          )}
 
           {/* Search Bar */}
           <Card
@@ -709,7 +733,13 @@ const CoursePage = () => {
             className="animate-slide-in shadow-lg transition-all duration-300 hover:shadow-2xl"
             style={{ animationDelay: '0.2s', opacity: 0 }}
           >
-            <CardHeader className="bg-gradient-to-r from-cyan-600 to-blue-600 text-white">
+            <CardHeader
+              className={`text-white ${
+                isTeacher()
+                  ? 'bg-gradient-to-r from-cyan-600 to-blue-600'
+                  : 'bg-gradient-to-r from-green-600 to-emerald-600'
+              }`}
+            >
               <CardTitle className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <BookOpen className="h-5 w-5 transition-transform hover:scale-110" />
@@ -757,9 +787,11 @@ const CoursePage = () => {
                   <p className="mb-4 text-gray-500">
                     {searchTerm
                       ? 'No courses found matching your search.'
-                      : 'Get started by creating your first course'}
+                      : isTeacher()
+                        ? 'Get started by creating your first course'
+                        : 'No courses available yet'}
                   </p>
-                  {!searchTerm && (
+                  {!searchTerm && isTeacher() && (
                     <Button onClick={handleCreateCourse} className="gap-2">
                       <Plus className="h-4 w-4" />
                       Create First Course
@@ -817,34 +849,40 @@ const CoursePage = () => {
                               size="icon"
                               onClick={() => handleViewCourse(course)}
                               className="transition-all duration-200 hover:scale-110 hover:bg-purple-50"
-                              title="Manage sessions"
+                              title={
+                                isTeacher() ? 'Manage sessions' : 'View course'
+                              }
                             >
-                              <BookOpen className="h-4 w-4 text-purple-600" />
+                              <Eye className="h-4 w-4 text-purple-600" />
                             </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleEditCourse(course)}
-                              className="transition-all duration-200 hover:scale-110 hover:bg-green-50"
-                              title="Edit course"
-                            >
-                              <Edit className="h-4 w-4 text-green-600" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleDeleteCourse(course)}
-                              disabled={deleteCourseMutation.isPending}
-                              className="transition-all duration-200 hover:scale-110 hover:bg-red-50"
-                              title="Delete course"
-                            >
-                              {deleteCourseMutation.isPending &&
-                              courseToDelete?.id === course.id ? (
-                                <Loader2 className="h-4 w-4 animate-spin text-red-500" />
-                              ) : (
-                                <Trash2 className="h-4 w-4 text-red-500" />
-                              )}
-                            </Button>
+                            {isTeacher() && (
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleEditCourse(course)}
+                                  className="transition-all duration-200 hover:scale-110 hover:bg-green-50"
+                                  title="Edit course"
+                                >
+                                  <Edit className="h-4 w-4 text-green-600" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleDeleteCourse(course)}
+                                  disabled={deleteCourseMutation.isPending}
+                                  className="transition-all duration-200 hover:scale-110 hover:bg-red-50"
+                                  title="Delete course"
+                                >
+                                  {deleteCourseMutation.isPending &&
+                                  courseToDelete?.id === course.id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin text-red-500" />
+                                  ) : (
+                                    <Trash2 className="h-4 w-4 text-red-500" />
+                                  )}
+                                </Button>
+                              </>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -855,8 +893,34 @@ const CoursePage = () => {
             </CardContent>
           </Card>
 
+          {/* Student View Info */}
+          {!isTeacher() && courses.length > 0 && (
+            <div className="mt-8">
+              <Card className="border-green-200 bg-gradient-to-r from-green-50 to-emerald-50 shadow-md">
+                <CardContent className="p-6">
+                  <div className="flex items-start gap-3">
+                    <div className="rounded-full bg-green-100 p-2">
+                      <GraduationCap className="h-5 w-5 text-green-600" />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="mb-1 text-base font-semibold text-green-800">
+                        Student View
+                      </h3>
+                      <p className="text-sm text-green-700">
+                        Use the{' '}
+                        <Eye className="mx-1 inline h-4 w-4 text-green-600" />{' '}
+                        icon to view course details and access learning
+                        materials.
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
           {/* Stats Cards */}
-          {!loadingCourses && courses.length > 0 && (
+          {!loadingCourses && courses.length > 0 && isTeacher() && (
             <div className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-3">
               <Card
                 className="animate-scale-in border-cyan-200 bg-gradient-to-br from-cyan-50 to-cyan-100 transition-all duration-300 hover:scale-105 hover:shadow-lg"

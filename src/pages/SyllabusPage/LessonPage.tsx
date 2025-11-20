@@ -47,7 +47,6 @@ import {
   Trash2,
   Eye,
   GraduationCap,
-  RefreshCw,
   FolderOpen,
   Loader2,
   Search,
@@ -83,7 +82,6 @@ interface SyllabusWithCourses extends SyllabusDto {
 export default function LessonPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [viewAsTeacher, setViewAsTeacher] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSemester, setSelectedSemester] = useState<
     Semester | undefined
@@ -119,10 +117,7 @@ export default function LessonPage() {
   // Get user role
   const userRole = __helpers.getUserRole();
   const isTeacher = () => {
-    if (userRole === 'ADMIN' || userRole === 'TEACHER') {
-      return true;
-    }
-    return viewAsTeacher;
+    return userRole === 'ADMIN' || userRole === 'TEACHER';
   };
 
   // Fetch syllabuses
@@ -778,13 +773,6 @@ export default function LessonPage() {
     navigate(`/course?create=true&syllabusId=${syllabusId}`);
   };
 
-  // Set view as teacher if user is admin or teacher
-  React.useEffect(() => {
-    if (userRole === 'ADMIN' || userRole === 'TEACHER') {
-      setViewAsTeacher(true);
-    }
-  }, [userRole]);
-
   return (
     <>
       <style>{`
@@ -860,37 +848,20 @@ export default function LessonPage() {
             )}
           </div>
 
-          {/* Role Toggle & Filters */}
+          {/* Role Badge & Filters */}
           <div className="animate-slide-in mb-6 space-y-4">
             <div className="flex items-center gap-4">
               <Badge
                 variant={isTeacher() ? 'default' : 'secondary'}
-                className="text-base transition-all duration-200 hover:scale-105"
+                className={`text-base transition-all duration-200 hover:scale-105 ${
+                  !isTeacher()
+                    ? 'border-green-300 bg-green-100 text-green-800'
+                    : ''
+                }`}
               >
                 <GraduationCap className="mr-1 h-4 w-4" />
-                {isTeacher() ? 'Teacher' : 'Student'}
+                {isTeacher() ? 'Teacher/Admin' : 'Student'}
               </Badge>
-
-              {/* Demo Toggle - Remove in production */}
-              {userRole !== 'ADMIN' && userRole !== 'TEACHER' && (
-                <div className="flex items-center gap-2 rounded-lg border border-orange-200 bg-orange-50 px-4 py-2">
-                  <RefreshCw className="h-4 w-4 text-orange-600" />
-                  <Label
-                    htmlFor="role-toggle"
-                    className="text-sm font-medium text-orange-700"
-                  >
-                    Switch View (Demo):
-                  </Label>
-                  <Switch
-                    id="role-toggle"
-                    checked={viewAsTeacher}
-                    onCheckedChange={setViewAsTeacher}
-                  />
-                  <span className="text-sm font-medium text-orange-700">
-                    {viewAsTeacher ? 'Teacher' : 'Student'}
-                  </span>
-                </div>
-              )}
             </div>
 
             {/* Search and Filters */}
@@ -1104,7 +1075,13 @@ export default function LessonPage() {
                 >
                   <Accordion type="single" collapsible className="w-full">
                     <AccordionItem value={syllabus.id} className="border-none">
-                      <CardHeader className="bg-gradient-to-r from-blue-600 to-cyan-600 p-0 text-white">
+                      <CardHeader
+                        className={`p-0 text-white ${
+                          isTeacher()
+                            ? 'bg-gradient-to-r from-blue-600 to-cyan-600'
+                            : 'bg-gradient-to-r from-green-600 to-emerald-600'
+                        }`}
+                      >
                         <AccordionTrigger className="w-full px-6 py-4 hover:no-underline [&[data-state=open]>div>svg]:rotate-90">
                           <div className="flex w-full items-start justify-between gap-4">
                             <div className="flex flex-1 items-start gap-4 text-left">
@@ -1113,7 +1090,13 @@ export default function LessonPage() {
                                 <CardTitle className="mb-2 text-2xl">
                                   {syllabus.title}
                                 </CardTitle>
-                                <p className="text-sm text-blue-100">
+                                <p
+                                  className={`text-sm ${
+                                    isTeacher()
+                                      ? 'text-blue-100'
+                                      : 'text-green-100'
+                                  }`}
+                                >
                                   {syllabus.description || 'No description'}
                                 </p>
                                 <div className="mt-2 flex flex-wrap gap-2">
@@ -1340,14 +1323,25 @@ export default function LessonPage() {
           {/* Student View Info */}
           {!isTeacher() && syllabusesWithCourses.length > 0 && (
             <div className="mt-8">
-              <Card className="border-blue-200 bg-blue-50">
+              <Card className="border-green-200 bg-gradient-to-r from-green-50 to-emerald-50 shadow-md">
                 <CardContent className="p-6">
-                  <p className="text-sm text-blue-700">
-                    💡 <strong>Note:</strong> You are viewing as a student.
-                    Click on syllabus titles to expand and view courses. Use the{' '}
-                    <Eye className="mx-1 inline h-4 w-4" /> icon to view course
-                    details.
-                  </p>
+                  <div className="flex items-start gap-3">
+                    <div className="rounded-full bg-green-100 p-2">
+                      <GraduationCap className="h-5 w-5 text-green-600" />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="mb-1 text-base font-semibold text-green-800">
+                        Student View
+                      </h3>
+                      <p className="text-sm text-green-700">
+                        Click on syllabus titles to expand and view courses. Use
+                        the{' '}
+                        <Eye className="mx-1 inline h-4 w-4 text-green-600" />{' '}
+                        icon to view course details and access learning
+                        materials.
+                      </p>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
             </div>
