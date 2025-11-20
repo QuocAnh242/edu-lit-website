@@ -72,8 +72,7 @@ import {
   CreateAssessmentQuestionsRequest,
   UpdateAssessmentQuestionRequest
 } from '@/services/assessment.api';
-import { getCoursesBySyllabusId, CourseDto } from '@/services/course.api';
-import { getAllSyllabuses, SyllabusDto } from '@/services/syllabus.api';
+import { getAllCourses, CourseDto } from '@/services/course.api';
 import {
   getAllQuestions,
   getQuestionsByQuestionBankId,
@@ -172,9 +171,7 @@ export default function AssessmentPage() {
 
   const assessments = (assessmentsData?.data || []) as AssessmentDto[];
 
-  // Fetch courses by getting all syllabuses first, then getting courses for each
-  // Since courses are nested under syllabuses in MongoDB, we need to aggregate them
-  // NOTE: The API gateway may not route query service endpoints, so this may return empty
+  // Fetch all courses using the new getAllCourses API
   const {
     data: coursesData,
     isLoading: loadingCourses,
@@ -182,98 +179,46 @@ export default function AssessmentPage() {
   } = useQuery({
     queryKey: ['courses'],
     queryFn: async () => {
+      console.log('[AssessmentPage] Fetching courses...');
       try {
-        // First, get all active syllabuses
-        // This may fail if the query service endpoint isn't routed through the gateway
-        const syllabusesResponse = await getAllSyllabuses({
-          pageNumber: 1,
-          pageSize: 1000,
-          isActive: true
-        });
-
-        // Check if we got any syllabuses
-        if (
-          !syllabusesResponse.success ||
-          !syllabusesResponse.data ||
-          syllabusesResponse.data.items.length === 0
-        ) {
-          console.warn(
-            'No syllabuses available or endpoint not accessible:',
-            syllabusesResponse.message
-          );
-          return {
-            success: true,
-            message: 'No syllabuses available',
-            data: {
-              items: [],
-              totalCount: 0,
-              pageNumber: 1,
-              pageSize: 100,
-              totalPages: 0,
-              hasPreviousPage: false,
-              hasNextPage: false
-            }
-          };
-        }
-
-        const syllabuses = (syllabusesResponse.data.items ||
-          []) as SyllabusDto[];
-
-        // Then, get courses for each syllabus and aggregate them
-        const allCourses: CourseDto[] = [];
-        for (const syllabus of syllabuses) {
-          try {
-            const coursesResponse = await getCoursesBySyllabusId(syllabus.id);
-            if (coursesResponse.success && coursesResponse.data) {
-              allCourses.push(...coursesResponse.data);
-            }
-          } catch (error) {
-            console.warn(
-              `Failed to fetch courses for syllabus ${syllabus.id}:`,
-              error
-            );
-            // Continue with other syllabuses even if one fails
-          }
-        }
-
-        return {
-          success: true,
-          message: 'Courses fetched successfully',
-          data: {
-            items: allCourses,
-            totalCount: allCourses.length,
-            pageNumber: 1,
-            pageSize: 100,
-            totalPages: 1,
-            hasPreviousPage: false,
-            hasNextPage: false
-          }
-        };
-      } catch (error: unknown) {
-        console.error('Error fetching courses:', error);
-        // Return empty result instead of throwing error
-        // This allows the page to still function even if courses can't be loaded
-        return {
-          success: true,
-          message:
-            'Failed to fetch courses - API gateway may not route query service endpoints',
-          data: {
-            items: [],
-            totalCount: 0,
-            pageNumber: 1,
-            pageSize: 100,
-            totalPages: 0,
-            hasPreviousPage: false,
-            hasNextPage: false
-          }
-        };
+        const response = await getAllCourses();
+        console.log('[AssessmentPage] Courses response received:', response);
+        console.log('[AssessmentPage] Response success:', response?.success);
+        console.log('[AssessmentPage] Response data:', response?.data);
+        console.log(
+          '[AssessmentPage] Response data type:',
+          typeof response?.data
+        );
+        console.log(
+          '[AssessmentPage] Response data is array?',
+          Array.isArray(response?.data)
+        );
+        console.log(
+          '[AssessmentPage] Number of courses:',
+          response?.data?.length || 0
+        );
+        return response;
+      } catch (error) {
+        console.error('[AssessmentPage] Error fetching courses:', error);
+        throw error;
       }
     },
-    retry: false, // Don't retry if endpoints aren't available
     staleTime: 5 * 60 * 1000 // Cache for 5 minutes
   });
 
-  const courses = (coursesData?.data?.items || []) as CourseDto[];
+  console.log('[AssessmentPage] Courses query state:', {
+    isLoading: loadingCourses,
+    isError: coursesError,
+    coursesData,
+    coursesDataType: typeof coursesData,
+    coursesDataData: coursesData?.data,
+    coursesDataDataType: typeof coursesData?.data
+  });
+
+  const courses = (coursesData?.data || []) as CourseDto[];
+
+  console.log('[AssessmentPage] Processed courses array:', courses);
+  console.log('[AssessmentPage] Number of courses to display:', courses.length);
 
   // Fetch assessment questions when questions dialog is open
   const {
@@ -1296,12 +1241,19 @@ export default function AssessmentPage() {
                             No courses available
                           </div>
                         ) : (
-                          courses.map((course) => (
-                            <SelectItem key={course.id} value={course.id}>
-                              {course.title}
-                              {course.courseCode && ` (${course.courseCode})`}
-                            </SelectItem>
-                          ))
+                          courses
+                            .filter(
+                              (course) =>
+                                course.id &&
+                                typeof course.id === 'string' &&
+                                course.id.trim() !== ''
+                            )
+                            .map((course) => (
+                              <SelectItem key={course.id} value={course.id}>
+                                {course.title}
+                                {course.courseCode && ` (${course.courseCode})`}
+                              </SelectItem>
+                            ))
                         )}
                       </SelectContent>
                     </Select>

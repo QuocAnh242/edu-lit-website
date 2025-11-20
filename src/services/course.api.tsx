@@ -107,87 +107,102 @@ export interface UpdateCourseRequest {
 // ============================================================================
 
 /**
- * Get all courses with pagination
- * NOTE: This endpoint does not exist in the backend.
- * The backend only has:
- * - GET /api/v1/courses/{id} - Get course by ID (query service)
- * - GET /api/v1/courses/by-syllabus/{syllabusId} - Get courses by syllabus ID (query service)
- *
- * This function is kept for backward compatibility but will fail.
- * Use getCoursesBySyllabusId() or aggregate courses from all syllabuses instead.
- * @param request - Pagination and filter parameters
- * @returns ApiResponse with PagedResult of CourseDto
- * @deprecated This endpoint doesn't exist. Use getCoursesBySyllabusId() instead.
+ * Get all courses
+ * Backend: GET /api/v1/courses (query service)
+ * Returns: ApiResponse<List<CourseDto>>
+ * @returns ApiResponse with array of CourseDto
  */
-export const getAllCourses = async (
-  request?: GetPaginationCoursesRequest
-): Promise<ApiResponse<PagedResult<CourseDto>>> => {
+export const getAllCourses = async (): Promise<ApiResponse<CourseDto[]>> => {
   try {
-    const params = new URLSearchParams();
-    if (request?.pageNumber) {
-      params.append('pageNumber', request.pageNumber.toString());
-    }
-    if (request?.pageSize) {
-      params.append('pageSize', request.pageSize.toString());
-    }
-    if (request?.searchTerm) {
-      params.append('searchTerm', request.searchTerm);
-    }
-    if (request?.syllabusId) {
-      params.append('syllabusId', request.syllabusId);
-    }
+    console.log('[getAllCourses] Starting API call to /api/v1/courses');
+    const response =
+      await BaseRequest.Get<ApiResponse<CourseDto[]>>('/api/v1/courses');
 
-    const queryString = params.toString();
-    const url = `/api/v1/courses${queryString ? `?${queryString}` : ''}`;
+    console.log('[getAllCourses] Raw API response:', response);
+    console.log('[getAllCourses] Response type:', typeof response);
+    console.log('[getAllCourses] Response.data type:', typeof response?.data);
+    console.log(
+      '[getAllCourses] Is response.data an array?',
+      Array.isArray(response?.data)
+    );
+    console.log('[getAllCourses] Response.data:', response?.data);
 
-    const response = await BaseRequest.Get<ApiResponse<PagedResult<any>>>(url);
-
+    // Handle response - backend returns ApiResponse<List<CourseDto>>
     // Check if response.data is an array (Query Service returns array directly)
-    let rawItems: any[] = [];
-
     if (Array.isArray(response?.data)) {
-      rawItems = response.data;
-    } else if (response?.data?.items && Array.isArray(response.data.items)) {
-      rawItems = response.data.items;
-    }
+      console.log(
+        '[getAllCourses] Processing array of',
+        response.data.length,
+        'items'
+      );
 
-    // Map MongoDB response to frontend DTO format
-    if (rawItems.length > 0) {
-      const mappedItems = rawItems.map((item: MongoCourseResponse) =>
-        mapMongoCourseToDto(item)
+      // Map backend DTO to frontend DTO format
+      const mappedItems = response.data
+        .map((item: any, index: number) => {
+          console.log(`[getAllCourses] Processing item ${index}:`, item);
+
+          // Backend returns CourseDto with CourseId (Guid as string), map to frontend format
+          const courseDto: CourseDto = {
+            id: item.courseId || item.CourseId || item.id || '',
+            syllabusId: item.syllabusId || item.SyllabusId || '',
+            courseCode: item.courseCode || item.CourseCode || '',
+            title: item.title || item.Title || '',
+            description: item.description || item.Description || '',
+            createdAt: item.createdAt || item.CreatedAt,
+            updatedAt: item.updatedAt || item.UpdatedAt
+          };
+
+          console.log(`[getAllCourses] Item ${index} mapped:`, courseDto);
+          return courseDto;
+        })
+        .filter((course: CourseDto, index: number) => {
+          const isValid =
+            course.id &&
+            typeof course.id === 'string' &&
+            course.id.trim() !== '';
+          if (!isValid) {
+            console.log(
+              `[getAllCourses] Filtered out item ${index} - invalid ID:`,
+              course
+            );
+          }
+          return isValid;
+        });
+
+      console.log('[getAllCourses] Final mapped items:', mappedItems);
+      console.log(
+        '[getAllCourses] Returning',
+        mappedItems.length,
+        'valid courses'
       );
 
       return {
-        success: true,
-        message: response?.message || null,
-        data: {
-          items: mappedItems,
-          totalCount: rawItems.length,
-          pageNumber: request?.pageNumber || 1,
-          pageSize: request?.pageSize || 1000,
-          totalPages: 1,
-          hasPreviousPage: false,
-          hasNextPage: false
-        }
-      } as ApiResponse<PagedResult<CourseDto>>;
+        success: response.success ?? true,
+        message: response.message || 'Courses fetched successfully',
+        data: mappedItems
+      } as ApiResponse<CourseDto[]>;
     }
 
-    // Return empty PagedResult
+    console.log(
+      '[getAllCourses] Response.data is not an array, returning empty array'
+    );
+    console.log(
+      '[getAllCourses] Response structure:',
+      JSON.stringify(response, null, 2)
+    );
+
     return {
-      success: true,
-      message: response?.message || null,
-      data: {
-        items: [],
-        totalCount: 0,
-        pageNumber: 1,
-        pageSize: 1000,
-        totalPages: 0,
-        hasPreviousPage: false,
-        hasNextPage: false
-      }
-    } as ApiResponse<PagedResult<CourseDto>>;
+      success: response.success ?? true,
+      message: response.message || 'No courses found',
+      data: []
+    } as ApiResponse<CourseDto[]>;
   } catch (error) {
-    console.error('Get All Courses Error:', error);
+    console.error('[getAllCourses] Error occurred:', error);
+    console.error('[getAllCourses] Error details:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      error
+    });
     throw error;
   }
 };
@@ -289,9 +304,9 @@ export const deleteCourse = async (
   courseId: string
 ): Promise<ApiResponse<object>> => {
   try {
-    const response = (await BaseRequest.Delete<ApiResponse<boolean>>(
+    const response = await BaseRequest.Delete<ApiResponse<object>>(
       `/api/v1/courses/${courseId}`
-    )) as ApiResponse<boolean>;
+    );
     return response;
   } catch (error) {
     console.error('Delete Course Error:', error);
