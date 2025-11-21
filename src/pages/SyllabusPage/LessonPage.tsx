@@ -47,25 +47,31 @@ import {
   Trash2,
   Eye,
   GraduationCap,
-  RefreshCw,
   FolderOpen,
   Loader2,
-  Search
+  Search,
+  AlertTriangle,
+  Calendar,
+  BookMarked,
+  Library,
+  CheckCircle2
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import __helpers from '@/helpers';
+
+//GET API SYLLABUS
 import {
-  getAllSyllabuses,
-  createSyllabus,
-  updateSyllabus,
-  deleteSyllabus,
+  getAllSyllabuses, // GET all syllabuses
+  createSyllabus, // POST new syllabus
+  updateSyllabus, // PUT update syllabus
+  deleteSyllabus, // DELETE syllabus
   SyllabusDto,
   CreateSyllabusRequest,
   UpdateSyllabusRequest,
   Semester
 } from '@/services/syllabus.api';
-import { getAllCourses, CourseDto } from '@/services/course.api';
+import { CourseDto } from '@/services/course.api';
 
 // Extended type for UI display (combining Syllabus with Courses)
 interface SyllabusWithCourses extends SyllabusDto {
@@ -76,7 +82,6 @@ interface SyllabusWithCourses extends SyllabusDto {
 export default function LessonPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [viewAsTeacher, setViewAsTeacher] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSemester, setSelectedSemester] = useState<
     Semester | undefined
@@ -103,16 +108,16 @@ export default function LessonPage() {
   const [formErrors, setFormErrors] = useState<{
     title?: string;
     academicYear?: string;
+    semester?: string;
     description?: string;
+    yearSemesterCombo?: string; // Error for Academic Year + Semester combination
   }>({});
+  const [errorShakeKey, setErrorShakeKey] = useState(0); // Key to trigger shake animation
 
   // Get user role
   const userRole = __helpers.getUserRole();
   const isTeacher = () => {
-    if (userRole === 'ADMIN' || userRole === 'TEACHER') {
-      return true;
-    }
-    return viewAsTeacher;
+    return userRole === 'ADMIN' || userRole === 'TEACHER';
   };
 
   // Fetch syllabuses
@@ -123,6 +128,15 @@ export default function LessonPage() {
   } = useQuery({
     queryKey: ['syllabuses', searchTerm, selectedSemester, showActiveOnly],
     queryFn: async () => {
+      console.log('🔄 [FETCH SYLLABUSES] Starting fetch...');
+      console.log('📋 Query params:', {
+        pageNumber: 1,
+        pageSize: 100,
+        searchTerm: searchTerm || undefined,
+        semester: selectedSemester,
+        isActive: showActiveOnly
+      });
+
       const response = await getAllSyllabuses({
         pageNumber: 1,
         pageSize: 100,
@@ -130,44 +144,62 @@ export default function LessonPage() {
         semester: selectedSemester,
         isActive: showActiveOnly
       });
+
+      console.log('✅ [FETCH SYLLABUSES] Response received:', response);
+      console.log('📊 Total syllabuses:', response?.data?.items?.length || 0);
+      console.log('📝 Syllabuses data:', response?.data?.items);
+
       return response;
-    }
-  });
-
-  const syllabuses = (syllabusesData?.data?.items || []) as SyllabusDto[];
-
-  // Fetch courses for each syllabus (to show course count)
-  // Note: This is a simplified approach. In production, you might want to optimize this
-  const { data: coursesData } = useQuery({
-    queryKey: ['courses'],
-    queryFn: async () => {
-      try {
-        const response = await getAllCourses({
-          pageNumber: 1,
-          pageSize: 1000
-        });
-        return response;
-      } catch (error) {
-        console.error('Error fetching courses:', error);
-        return {
-          success: false,
-          message: 'Failed to fetch courses',
-          data: {
-            items: [],
-            totalCount: 0,
-            pageNumber: 1,
-            pageSize: 1000,
-            totalPages: 0,
-            hasPreviousPage: false,
-            hasNextPage: false
-          }
-        };
-      }
     },
-    enabled: syllabuses.length > 0
+    staleTime: 0, // Always consider data stale - refetch immediately
+    refetchOnMount: true, // Refetch when component mounts
+    refetchOnWindowFocus: false // Don't refetch on window focus to avoid too many requests
   });
 
-  const allCourses = (coursesData?.data?.items || []) as CourseDto[];
+  let syllabuses = (syllabusesData?.data?.items || []) as SyllabusDto[];
+
+  // Client-side filter by semester if selected (since backend might not filter correctly)
+  if (selectedSemester !== undefined) {
+    syllabuses = syllabuses.filter((s) => s.semester === selectedSemester);
+    console.log(
+      '🔍 [CLIENT FILTER] Filtered by semester:',
+      selectedSemester,
+      'Count:',
+      syllabuses.length
+    );
+  }
+
+  // Sort by academic year (newest first: 2025-2026 before 2024-2025)
+  syllabuses = syllabuses.sort((a, b) => {
+    // Extract start year from "YYYY-YYYY" format
+    const yearA = parseInt(a.academicYear?.split('-')[0] || '0');
+    const yearB = parseInt(b.academicYear?.split('-')[0] || '0');
+    return yearB - yearA; // Descending order (newest first)
+  });
+
+  console.log('🎯 [SYLLABUSES STATE] Current syllabuses in state:', syllabuses);
+  console.log('📊 [SYLLABUSES STATE] Count:', syllabuses.length);
+
+  // Extract courses from syllabuses (courses are already included in syllabus response from MongoDB)
+  // No need for separate API call - courses come with each syllabus
+  const allCourses = syllabuses.flatMap(
+    (syllabus) =>
+      (syllabus as any).courses?.map((course: any) => ({
+        id: course.courseId || course.course_id || '',
+        syllabusId: syllabus.id,
+        courseCode: course.courseCode || course.course_code || '',
+        title: course.title || '',
+        description: course.description || '',
+        orderIndex: course.orderIndex || course.order_index || 0,
+        durationWeeks: course.durationWeeks || course.duration_weeks || 0,
+        isActive: course.isActive ?? course.is_active ?? true,
+        createdAt: course.createdAt || course.created_at || '',
+        updatedAt: course.updatedAt || course.updated_at || ''
+      })) || []
+  );
+
+  console.log('📚 [COURSES FROM SYLLABUSES] Total courses:', allCourses.length);
+  console.log('📚 [COURSES FROM SYLLABUSES] Courses:', allCourses);
 
   // Map syllabuses with course counts
   const syllabusesWithCourses: SyllabusWithCourses[] = syllabuses.map(
@@ -180,24 +212,68 @@ export default function LessonPage() {
   );
 
   // Mutations
+  // CREATE SYLLABUS
   const createSyllabusMutation = useMutation({
     mutationFn: async (data: CreateSyllabusRequest) => {
-      return await createSyllabus(data);
+      console.log('🚀 [CREATE MUTATION] Sending create request...');
+      console.log('📤 [CREATE MUTATION] Data:', data);
+      const result = await createSyllabus(data);
+      console.log('✅ [CREATE MUTATION] Response:', result);
+      return result;
     },
-    onSuccess: () => {
-      toast.success('Syllabus created successfully');
-      queryClient.invalidateQueries({ queryKey: ['syllabuses'] });
-      queryClient.invalidateQueries({ queryKey: ['courses'] });
+    onSuccess: async (data) => {
+      console.log('🎉 [CREATE SUCCESS] Syllabus created successfully!');
+      console.log('📋 [CREATE SUCCESS] Response data:', data);
+
+      // Show success toast immediately
+      toast.success('Syllabus created successfully! 🎉', {
+        duration: 3000,
+        position: 'top-center'
+      });
+
+      console.log('🔄 [CREATE SUCCESS] Waiting for CQRS event propagation...');
+
+      // Wait for event to propagate: Command Service → RabbitMQ → Query Service → MongoDB
+      // Increased to 5 seconds to ensure MongoDB is fully synced
+      await new Promise((resolve) => setTimeout(resolve, 5000)); // 5 seconds delay
+
+      console.log('🔄 [CREATE SUCCESS] Refetching queries...');
+
+      // AWAIT refetch to ensure data is fresh before closing dialog
+      await queryClient.refetchQueries({
+        queryKey: ['syllabuses'],
+        exact: false,
+        type: 'active'
+      });
+      await queryClient.refetchQueries({
+        queryKey: ['courses'],
+        exact: false,
+        type: 'active'
+      });
+
+      console.log('✅ [CREATE SUCCESS] Refetch completed, data is fresh');
+
+      // Close dialog AFTER refetch completes
       setSyllabusDialogOpen(false);
       resetSyllabusForm();
     },
     onError: (error: unknown) => {
+      console.error('❌ [CREATE SYLLABUS ERROR] Full error:', error);
+
       // Extract error message from API response
+      // Axios interceptor already extracts error.response.data, so error is the API response object
       const apiError = error as {
         message?: string;
         errors?: string[];
         errorCode?: string | number;
+        success?: boolean;
       };
+
+      console.error('❌ [CREATE SYLLABUS ERROR] Parsed error:', {
+        message: apiError?.message,
+        errors: apiError?.errors,
+        errorCode: apiError?.errorCode
+      });
 
       let errorMessage = apiError?.message || 'Failed to create syllabus';
 
@@ -249,12 +325,13 @@ export default function LessonPage() {
           errorMsgLower.includes('23505') || // PostgreSQL unique constraint violation error code
           errorMsgLower.includes('cannot insert duplicate')
         ) {
-          // Most likely a unique constraint violation on (AcademicYear, Semester)
-          errorMessage = `A syllabus with Academic Year "${syllabusForm.academicYear.trim()}" and Semester "${getSemesterDisplayName(syllabusForm.semester)}" already exists. Please choose a different combination.`;
+          // Backend has unique constraint on (AcademicYear, Semester)
+          // This means multiple syllabuses with same year/semester are not allowed by backend
+          errorMessage = `Backend constraint: Only one syllabus per Academic Year and Semester is allowed. A syllabus for "${syllabusForm.academicYear.trim()}" - "${getSemesterDisplayName(syllabusForm.semester)}" already exists. Please choose a different year or semester.`;
           // Set form error to highlight the field
           setFormErrors({
             academicYear:
-              'This Academic Year and Semester combination already exists'
+              'This Academic Year and Semester combination already exists (backend constraint)'
           });
         } else {
           // Generic database error - provide helpful message
@@ -269,6 +346,7 @@ export default function LessonPage() {
     }
   });
 
+  // UPDATE SYLLABUS
   const updateSyllabusMutation = useMutation({
     mutationFn: async ({
       id,
@@ -277,11 +355,49 @@ export default function LessonPage() {
       id: string;
       data: UpdateSyllabusRequest;
     }) => {
-      return await updateSyllabus(id, data);
+      console.log('🔄 [UPDATE MUTATION] Sending update request...');
+      console.log('📋 [UPDATE MUTATION] ID:', id);
+      console.log('📤 [UPDATE MUTATION] Data:', data);
+      const result = await updateSyllabus(id, data);
+      console.log('✅ [UPDATE MUTATION] Response:', result);
+      return result;
     },
-    onSuccess: () => {
-      toast.success('Syllabus updated successfully');
-      queryClient.invalidateQueries({ queryKey: ['syllabuses'] });
+    onSuccess: async (data) => {
+      console.log('🎉 [UPDATE SUCCESS] Syllabus updated successfully!');
+      console.log('📋 [UPDATE SUCCESS] Response data:', data);
+
+      // Show success toast immediately
+      toast.success('Syllabus updated successfully! ✅', {
+        duration: 3000,
+        position: 'top-center'
+      });
+
+      console.log('🔄 [UPDATE SUCCESS] Waiting for CQRS event propagation...');
+
+      // Wait longer for event to propagate: Command Service → RabbitMQ → Query Service → MongoDB
+      // CQRS architecture with event sourcing can take up to 5 seconds
+      // Increased to 5 seconds to ensure MongoDB is fully synced
+      await new Promise((resolve) => setTimeout(resolve, 5000)); // 5 seconds delay
+
+      console.log('🔄 [UPDATE SUCCESS] Refetching queries...');
+
+      // AWAIT refetch to ensure data is fresh before closing dialog
+      await queryClient.refetchQueries({
+        queryKey: ['syllabuses'],
+        exact: false,
+        type: 'active'
+      });
+      await queryClient.refetchQueries({
+        queryKey: ['courses'],
+        exact: false,
+        type: 'active'
+      });
+
+      console.log(
+        '✅ [UPDATE SUCCESS] Refetch completed, data should be fresh'
+      );
+
+      // Close dialog AFTER refetch completes
       setSyllabusDialogOpen(false);
       setEditingSyllabus(null);
       resetSyllabusForm();
@@ -296,14 +412,48 @@ export default function LessonPage() {
     }
   });
 
+  // DELETE SYLLABUS
   const deleteSyllabusMutation = useMutation({
     mutationFn: async (syllabusId: string) => {
-      return await deleteSyllabus(syllabusId);
+      console.log('🗑️ [DELETE MUTATION] Deleting syllabus...');
+      console.log('📋 [DELETE MUTATION] ID:', syllabusId);
+      const result = await deleteSyllabus(syllabusId);
+      console.log('✅ [DELETE MUTATION] Response:', result);
+      return result;
     },
-    onSuccess: () => {
-      toast.success('Syllabus deleted successfully');
-      queryClient.invalidateQueries({ queryKey: ['syllabuses'] });
-      queryClient.invalidateQueries({ queryKey: ['courses'] });
+    onSuccess: async (data) => {
+      console.log('🎉 [DELETE SUCCESS] Syllabus deleted successfully!');
+      console.log('📋 [DELETE SUCCESS] Response data:', data);
+
+      // Show success toast immediately
+      toast.success('Syllabus deleted successfully! 🗑️', {
+        duration: 3000,
+        position: 'top-center'
+      });
+
+      console.log('🔄 [DELETE SUCCESS] Waiting for CQRS event propagation...');
+
+      // Wait for event to propagate: Command Service → RabbitMQ → Query Service → MongoDB
+      // Increased to 5 seconds to ensure MongoDB is fully synced
+      await new Promise((resolve) => setTimeout(resolve, 5000)); // 5 seconds delay
+
+      console.log('🔄 [DELETE SUCCESS] Refetching queries...');
+
+      // AWAIT refetch to ensure data is fresh before closing dialog
+      await queryClient.refetchQueries({
+        queryKey: ['syllabuses'],
+        exact: false,
+        type: 'active'
+      });
+      await queryClient.refetchQueries({
+        queryKey: ['courses'],
+        exact: false,
+        type: 'active'
+      });
+
+      console.log('✅ [DELETE SUCCESS] Refetch completed, data is fresh');
+
+      // Close dialog AFTER refetch completes
       setDeleteDialogOpen(false);
       setSyllabusToDelete(null);
     },
@@ -336,14 +486,21 @@ export default function LessonPage() {
   };
 
   const handleDeleteSyllabus = (syllabus: SyllabusDto) => {
+    console.log('🗑️ [DELETE] Syllabus to delete:', syllabus);
+    console.log('🔑 [DELETE] Syllabus ID:', syllabus.id);
     setSyllabusToDelete(syllabus);
     setDeleteDialogOpen(true);
   };
 
-  const validateSyllabusForm = (): {
-    isValid: boolean;
-    errors: { title?: string; academicYear?: string; description?: string };
-  } => {
+  const validateSyllabusForm = () => {
+    console.log(' [VALIDATION START] Current form data:', {
+      title: syllabusForm.title,
+      academicYear: syllabusForm.academicYear,
+      semester: syllabusForm.semester,
+      description: syllabusForm.description,
+      isEditing: !!editingSyllabus
+    });
+
     const errors: {
       title?: string;
       academicYear?: string;
@@ -351,128 +508,224 @@ export default function LessonPage() {
     } = {};
 
     // Validate Title
+    console.log(' Validating Title:', syllabusForm.title);
     if (!syllabusForm.title.trim()) {
       errors.title = 'Title is required';
+      console.log(' Title Error:', errors.title);
     } else if (syllabusForm.title.trim().length < 5) {
       errors.title = 'Title must be at least 5 characters';
+      console.log(' Title Error:', errors.title);
     } else if (syllabusForm.title.trim().length > 100) {
       errors.title = 'Title cannot exceed 100 characters';
+      console.log(' Title Error:', errors.title);
+    } else {
+      console.log(' Title is valid');
     }
 
     // Validate AcademicYear
+    console.log(' Validating Academic Year:', syllabusForm.academicYear);
     if (!syllabusForm.academicYear.trim()) {
       errors.academicYear = 'Academic year is required';
+      console.log(' Academic Year Error:', errors.academicYear);
     } else {
       const yearPattern = /^\d{4}-\d{4}$/;
+      console.log(
+        ' Testing pattern:',
+        yearPattern.test(syllabusForm.academicYear.trim())
+      );
       if (!yearPattern.test(syllabusForm.academicYear.trim())) {
         errors.academicYear =
           'Academic year must be in the format YYYY-YYYY (e.g., 2024-2025)';
+        console.log(' Academic Year Error (format):', errors.academicYear);
       } else {
         const years = syllabusForm.academicYear.trim().split('-');
         const startYear = parseInt(years[0]);
         const endYear = parseInt(years[1]);
         const currentYear = new Date().getFullYear();
+        console.log(' Year validation:', { startYear, endYear, currentYear });
 
         if (endYear <= startYear) {
           errors.academicYear = 'End year must be greater than start year';
+          console.log(
+            ' Academic Year Error (end <= start):',
+            errors.academicYear
+          );
         } else if (startYear < 2000 || endYear > currentYear + 5) {
           errors.academicYear = `Academic year must be between 2000 and ${currentYear + 5}`;
+          console.log(' Academic Year Error (range):', errors.academicYear);
+        } else {
+          console.log(' Academic Year is valid');
         }
       }
     }
 
-    // Validate Description (required for creation)
-    if (!editingSyllabus) {
-      if (!syllabusForm.description || !syllabusForm.description.trim()) {
-        errors.description = 'Description is required';
-      } else if (syllabusForm.description.trim().length > 500) {
-        errors.description = 'Description cannot exceed 500 characters';
-      }
-    } else if (
-      syllabusForm.description &&
-      syllabusForm.description.trim().length > 500
-    ) {
+    // Validate Description (required for both creation and update)
+    console.log(' Validating Description:', syllabusForm.description);
+    if (!syllabusForm.description || !syllabusForm.description.trim()) {
+      errors.description = 'Description is required';
+      console.log(' Description Error:', errors.description);
+    } else if (syllabusForm.description.trim().length > 500) {
       errors.description = 'Description cannot exceed 500 characters';
+      console.log(' Description Error:', errors.description);
+    } else {
+      console.log(' Description is valid');
     }
+
+    console.log(' [VALIDATION RESULT]', {
+      isValid: Object.keys(errors).length === 0,
+      errors: errors,
+      errorCount: Object.keys(errors).length
+    });
 
     setFormErrors(errors);
     return { isValid: Object.keys(errors).length === 0, errors };
   };
 
   const handleSaveSyllabus = () => {
-    // Clear previous errors
-    setFormErrors({});
+    try {
+      console.log('\n🚀 [SAVE SYLLABUS] Button clicked');
+      console.log('📋 Current form state:', syllabusForm);
 
-    // Validate form
-    const validation = validateSyllabusForm();
-    if (!validation.isValid) {
-      // Show first error
-      const firstError = Object.values(validation.errors)[0];
-      if (firstError) {
-        toast.error(firstError);
-      }
-      return;
-    }
+      // Clear previous errors
+      setFormErrors({});
 
-    // Prepare data for API
-    // Note: Description is validated above, so for creation it will always have a value
-    const dataToSend: CreateSyllabusRequest = {
-      title: syllabusForm.title.trim(),
-      academicYear: syllabusForm.academicYear.trim(),
-      semester: syllabusForm.semester,
-      description: syllabusForm.description?.trim() || ''
-    };
+      // Validate form
+      const validation = validateSyllabusForm();
+      if (!validation.isValid) {
+        console.log('❌ [VALIDATION FAILED]');
+        console.log('🔴 All errors:', validation.errors);
 
-    // For creation, check if a syllabus with the same AcademicYear + Semester already exists
-    // Note: This is a client-side check that may not catch all cases if syllabuses are filtered/paginated
-    // The backend will also enforce the unique constraint, so we'll handle that error gracefully
-    if (!editingSyllabus) {
-      const existingSyllabus = syllabuses.find(
-        (s) =>
-          s.academicYear.trim().toLowerCase() ===
-            dataToSend.academicYear.trim().toLowerCase() &&
-          s.semester === dataToSend.semester
-      );
-
-      if (existingSyllabus) {
-        toast.error(
-          `A syllabus with Academic Year "${dataToSend.academicYear}" and Semester "${getSemesterDisplayName(dataToSend.semester)}" already exists. Please choose a different combination.`
-        );
-        setFormErrors({
-          academicYear:
-            'This Academic Year and Semester combination already exists'
-        });
-        return;
-      }
-    }
-
-    if (editingSyllabus) {
-      // For updates, check if another syllabus (not the one being edited) has the same AcademicYear + Semester
-      const existingSyllabus = syllabuses.find(
-        (s) =>
-          s.id !== editingSyllabus.id &&
-          s.academicYear.toLowerCase() ===
-            dataToSend.academicYear.toLowerCase() &&
-          s.semester === dataToSend.semester
-      );
-
-      if (existingSyllabus) {
-        toast.error(
-          `A syllabus with Academic Year "${dataToSend.academicYear}" and Semester "${getSemesterDisplayName(dataToSend.semester)}" already exists. Please choose a different combination.`
-        );
-        setFormErrors({
-          academicYear:
-            'This Academic Year and Semester combination already exists'
-        });
+        // Show first error
+        const firstError = Object.values(validation.errors)[0];
+        if (firstError) {
+          console.log('⚠️ Showing error to user:', firstError);
+          toast.error(firstError);
+        }
         return;
       }
 
-      updateSyllabusMutation.mutate({
-        id: editingSyllabus.id,
-        data: dataToSend
-      });
-    } else {
-      createSyllabusMutation.mutate(dataToSend);
+      console.log('✅ [VALIDATION PASSED]');
+
+      // Prepare data for API
+      // Note: Description is validated above, so for creation it will always have a value
+      const dataToSend: CreateSyllabusRequest = {
+        title: syllabusForm.title.trim(),
+        academicYear: syllabusForm.academicYear.trim(),
+        semester: syllabusForm.semester,
+        description: syllabusForm.description?.trim() || ''
+      };
+
+      console.log('📤 [DATA TO SEND]', dataToSend);
+      console.log('🔍 [DEBUG] About to check duplicates...');
+
+      // For creation, check if a syllabus with the same AcademicYear + Semester already exists
+      // Backend constraint: Only one syllabus per Academic Year and Semester (Title can be duplicate)
+      // Note: This is a client-side check that may not catch all cases if syllabuses are filtered/paginated
+      // The backend will also enforce the unique constraint, so we'll handle that error gracefully
+      if (!editingSyllabus) {
+        console.log('🔍 [DUPLICATE CHECK] Checking for duplicates...');
+        console.log(
+          '📊 [DUPLICATE CHECK] Current syllabuses count:',
+          syllabuses.length
+        );
+        console.log('📋 [DUPLICATE CHECK] Looking for:', {
+          academicYear: dataToSend.academicYear,
+          semester: dataToSend.semester
+        });
+
+        const existingSyllabus = syllabuses.find(
+          (s) =>
+            s.academicYear?.trim().toLowerCase() ===
+              dataToSend.academicYear?.trim().toLowerCase() &&
+            s.semester === dataToSend.semester
+        );
+
+        console.log(
+          '🔎 [DUPLICATE CHECK] Result:',
+          existingSyllabus ? 'FOUND' : 'NOT FOUND'
+        );
+
+        if (existingSyllabus) {
+          console.log(
+            '⚠️ [DUPLICATE CHECK] Found existing syllabus:',
+            existingSyllabus
+          );
+          toast.error(
+            `A syllabus for Academic Year "${dataToSend.academicYear}" and Semester "${getSemesterDisplayName(dataToSend.semester)}" already exists. Only one syllabus per year and semester is allowed.`
+          );
+          setFormErrors({
+            yearSemesterCombo:
+              'This Academic Year and Semester combination already exists'
+          });
+          // Trigger shake animation by changing key
+          setErrorShakeKey((prev) => prev + 1);
+          return;
+        } else {
+          console.log(
+            '✅ [DUPLICATE CHECK] No duplicate found, proceeding to create...'
+          );
+        }
+      }
+
+      if (editingSyllabus) {
+        console.log('✏️ [EDIT MODE] Updating syllabus:', editingSyllabus.id);
+        // For updates, check if another syllabus (not the one being edited) has the same AcademicYear + Semester
+        const existingSyllabus = syllabuses.find(
+          (s) =>
+            s.id !== editingSyllabus.id &&
+            s.academicYear?.trim().toLowerCase() ===
+              dataToSend.academicYear?.trim().toLowerCase() &&
+            s.semester === dataToSend.semester
+        );
+
+        if (existingSyllabus) {
+          console.log(
+            '⚠️ [DUPLICATE CHECK - EDIT] Found existing syllabus:',
+            existingSyllabus
+          );
+          toast.error(
+            `A syllabus for Academic Year "${dataToSend.academicYear}" and Semester "${getSemesterDisplayName(dataToSend.semester)}" already exists. Only one syllabus per year and semester is allowed.`
+          );
+          setFormErrors({
+            yearSemesterCombo:
+              'This Academic Year and Semester combination already exists'
+          });
+          // Trigger shake animation by changing key
+          setErrorShakeKey((prev) => prev + 1);
+          return;
+        } else {
+          console.log('✅ [DUPLICATE CHECK - EDIT] No duplicate found');
+        }
+
+        console.log('🔄 Calling update mutation...');
+        console.log('📋 Update payload:', {
+          id: editingSyllabus.id,
+          data: dataToSend
+        });
+        console.log('⏳ Mutation pending?', updateSyllabusMutation.isPending);
+        console.log('📝 Current form data:', syllabusForm);
+        console.log('🆔 Editing syllabus ID:', editingSyllabus.id);
+        console.log(
+          '📊 Current syllabuses in state:',
+          syllabuses.map((s) => ({ id: s.id, title: s.title }))
+        );
+
+        updateSyllabusMutation.mutate({
+          id: editingSyllabus.id,
+          data: dataToSend
+        });
+
+        console.log('✅ Mutation.mutate() called - waiting for response...');
+      } else {
+        console.log('➕ [CREATE MODE] Creating new syllabus');
+        console.log('🔄 Calling create mutation...');
+        createSyllabusMutation.mutate(dataToSend);
+      }
+    } catch (error) {
+      console.error('❌ [SAVE SYLLABUS ERROR]', error);
+      toast.error(
+        'An unexpected error occurred. Please check the console for details.'
+      );
     }
   };
 
@@ -519,13 +772,6 @@ export default function LessonPage() {
   const handleCreateCourse = (syllabusId: string) => {
     navigate(`/course?create=true&syllabusId=${syllabusId}`);
   };
-
-  // Set view as teacher if user is admin or teacher
-  React.useEffect(() => {
-    if (userRole === 'ADMIN' || userRole === 'TEACHER') {
-      setViewAsTeacher(true);
-    }
-  }, [userRole]);
 
   return (
     <>
@@ -602,37 +848,20 @@ export default function LessonPage() {
             )}
           </div>
 
-          {/* Role Toggle & Filters */}
+          {/* Role Badge & Filters */}
           <div className="animate-slide-in mb-6 space-y-4">
             <div className="flex items-center gap-4">
               <Badge
                 variant={isTeacher() ? 'default' : 'secondary'}
-                className="text-base transition-all duration-200 hover:scale-105"
+                className={`text-base transition-all duration-200 hover:scale-105 ${
+                  !isTeacher()
+                    ? 'border-green-300 bg-green-100 text-green-800'
+                    : ''
+                }`}
               >
                 <GraduationCap className="mr-1 h-4 w-4" />
-                {isTeacher() ? 'Teacher' : 'Student'}
+                {isTeacher() ? 'Teacher/Admin' : 'Student'}
               </Badge>
-
-              {/* Demo Toggle - Remove in production */}
-              {userRole !== 'ADMIN' && userRole !== 'TEACHER' && (
-                <div className="flex items-center gap-2 rounded-lg border border-orange-200 bg-orange-50 px-4 py-2">
-                  <RefreshCw className="h-4 w-4 text-orange-600" />
-                  <Label
-                    htmlFor="role-toggle"
-                    className="text-sm font-medium text-orange-700"
-                  >
-                    Switch View (Demo):
-                  </Label>
-                  <Switch
-                    id="role-toggle"
-                    checked={viewAsTeacher}
-                    onCheckedChange={setViewAsTeacher}
-                  />
-                  <span className="text-sm font-medium text-orange-700">
-                    {viewAsTeacher ? 'Teacher' : 'Student'}
-                  </span>
-                </div>
-              )}
             </div>
 
             {/* Search and Filters */}
@@ -846,7 +1075,13 @@ export default function LessonPage() {
                 >
                   <Accordion type="single" collapsible className="w-full">
                     <AccordionItem value={syllabus.id} className="border-none">
-                      <CardHeader className="bg-gradient-to-r from-blue-600 to-cyan-600 p-0 text-white">
+                      <CardHeader
+                        className={`p-0 text-white ${
+                          isTeacher()
+                            ? 'bg-gradient-to-r from-blue-600 to-cyan-600'
+                            : 'bg-gradient-to-r from-green-600 to-emerald-600'
+                        }`}
+                      >
                         <AccordionTrigger className="w-full px-6 py-4 hover:no-underline [&[data-state=open]>div>svg]:rotate-90">
                           <div className="flex w-full items-start justify-between gap-4">
                             <div className="flex flex-1 items-start gap-4 text-left">
@@ -855,35 +1090,46 @@ export default function LessonPage() {
                                 <CardTitle className="mb-2 text-2xl">
                                   {syllabus.title}
                                 </CardTitle>
-                                <p className="text-sm text-blue-100">
+                                <p
+                                  className={`text-sm ${
+                                    isTeacher()
+                                      ? 'text-blue-100'
+                                      : 'text-green-100'
+                                  }`}
+                                >
                                   {syllabus.description || 'No description'}
                                 </p>
                                 <div className="mt-2 flex flex-wrap gap-2">
+                                  {syllabus.academicYear && (
+                                    <Badge
+                                      variant="secondary"
+                                      className="flex items-center gap-1 bg-white/90 font-semibold text-blue-700 shadow-md transition-all duration-200 hover:scale-105 hover:bg-white hover:shadow-lg"
+                                    >
+                                      <Calendar className="h-3 w-3" />
+                                      {syllabus.academicYear}
+                                    </Badge>
+                                  )}
                                   <Badge
                                     variant="secondary"
-                                    className="bg-white/20 text-white transition-all duration-200 hover:scale-105 hover:bg-white/30"
+                                    className="flex items-center gap-1 bg-white/90 font-semibold text-cyan-700 shadow-md transition-all duration-200 hover:scale-105 hover:bg-white hover:shadow-lg"
                                   >
-                                    📅 {syllabus.academicYear}
-                                  </Badge>
-                                  <Badge
-                                    variant="secondary"
-                                    className="bg-white/20 text-white transition-all duration-200 hover:scale-105 hover:bg-white/30"
-                                  >
-                                    📖{' '}
+                                    <BookMarked className="h-3 w-3" />
                                     {getSemesterDisplayName(syllabus.semester)}
                                   </Badge>
                                   <Badge
                                     variant="secondary"
-                                    className="bg-white/20 text-white transition-all duration-200 hover:scale-105 hover:bg-white/30"
+                                    className="flex items-center gap-1 bg-white/90 font-semibold text-blue-700 shadow-md transition-all duration-200 hover:scale-105 hover:bg-white hover:shadow-lg"
                                   >
-                                    📚 {syllabus.coursesCount} Courses
+                                    <Library className="h-3 w-3" />
+                                    {syllabus.coursesCount} Courses
                                   </Badge>
                                   {syllabus.isActive !== false && (
                                     <Badge
                                       variant="secondary"
-                                      className="bg-green-500/30 text-white transition-all duration-200 hover:scale-105 hover:bg-green-500/40"
+                                      className="flex items-center gap-1 bg-green-500 font-semibold text-white shadow-md transition-all duration-200 hover:scale-105 hover:bg-green-600 hover:shadow-lg"
                                     >
-                                      ✓ Active
+                                      <CheckCircle2 className="h-3 w-3" />
+                                      Active
                                     </Badge>
                                   )}
                                 </div>
@@ -893,28 +1139,47 @@ export default function LessonPage() {
                             {/* Syllabus Actions */}
                             {isTeacher() && (
                               <div className="flex gap-2">
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
+                                <div
+                                  role="button"
+                                  tabIndex={0}
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     handleEditSyllabus(syllabus);
                                   }}
-                                  className="text-white transition-all duration-200 hover:scale-110 hover:bg-white/20"
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter' || e.key === ' ') {
+                                      e.stopPropagation();
+                                      handleEditSyllabus(syllabus);
+                                    }
+                                  }}
+                                  className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-md text-white transition-all duration-200 hover:scale-110 hover:bg-white/20"
                                   title="Edit Syllabus"
                                 >
                                   <Edit className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
+                                </div>
+                                <div
+                                  role="button"
+                                  tabIndex={0}
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    handleDeleteSyllabus(syllabus);
+                                    if (!deleteSyllabusMutation.isPending) {
+                                      handleDeleteSyllabus(syllabus);
+                                    }
                                   }}
-                                  className="text-white transition-all duration-200 hover:scale-110 hover:bg-white/20"
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter' || e.key === ' ') {
+                                      e.stopPropagation();
+                                      if (!deleteSyllabusMutation.isPending) {
+                                        handleDeleteSyllabus(syllabus);
+                                      }
+                                    }
+                                  }}
+                                  className={`inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-md text-white transition-all duration-200 hover:scale-110 hover:bg-white/20 ${
+                                    deleteSyllabusMutation.isPending
+                                      ? 'cursor-not-allowed opacity-50'
+                                      : ''
+                                  }`}
                                   title="Delete Syllabus"
-                                  disabled={deleteSyllabusMutation.isPending}
                                 >
                                   {deleteSyllabusMutation.isPending &&
                                   syllabusToDelete?.id === syllabus.id ? (
@@ -922,7 +1187,7 @@ export default function LessonPage() {
                                   ) : (
                                     <Trash2 className="h-4 w-4" />
                                   )}
-                                </Button>
+                                </div>
                               </div>
                             )}
                           </div>
@@ -978,12 +1243,19 @@ export default function LessonPage() {
                                         <h4 className="font-semibold text-slate-800 transition-colors duration-200 group-hover:text-blue-700">
                                           {course.title}
                                         </h4>
-                                        {course.courseCode && (
+                                        {course.courseCode ? (
                                           <Badge
                                             variant="outline"
                                             className="font-mono text-xs"
                                           >
                                             {course.courseCode}
+                                          </Badge>
+                                        ) : (
+                                          <Badge
+                                            variant="outline"
+                                            className="border-orange-200 bg-orange-50 text-xs text-orange-700"
+                                          >
+                                            No Code
                                           </Badge>
                                         )}
                                       </div>
@@ -1051,14 +1323,25 @@ export default function LessonPage() {
           {/* Student View Info */}
           {!isTeacher() && syllabusesWithCourses.length > 0 && (
             <div className="mt-8">
-              <Card className="border-blue-200 bg-blue-50">
+              <Card className="border-green-200 bg-gradient-to-r from-green-50 to-emerald-50 shadow-md">
                 <CardContent className="p-6">
-                  <p className="text-sm text-blue-700">
-                    💡 <strong>Note:</strong> You are viewing as a student.
-                    Click on syllabus titles to expand and view courses. Use the{' '}
-                    <Eye className="mx-1 inline h-4 w-4" /> icon to view course
-                    details.
-                  </p>
+                  <div className="flex items-start gap-3">
+                    <div className="rounded-full bg-green-100 p-2">
+                      <GraduationCap className="h-5 w-5 text-green-600" />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="mb-1 text-base font-semibold text-green-800">
+                        Student View
+                      </h3>
+                      <p className="text-sm text-green-700">
+                        Click on syllabus titles to expand and view courses. Use
+                        the{' '}
+                        <Eye className="mx-1 inline h-4 w-4 text-green-600" />{' '}
+                        icon to view course details and access learning
+                        materials.
+                      </p>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
             </div>
@@ -1095,7 +1378,8 @@ export default function LessonPage() {
                 />
                 {formErrors.title && (
                   <p className="flex items-center gap-1 text-sm text-red-600">
-                    <span>⚠</span> {formErrors.title}
+                    <AlertTriangle className="h-4 w-4" />
+                    {formErrors.title}
                   </p>
                 )}
                 {!formErrors.title && syllabusForm.title && (
@@ -1124,12 +1408,13 @@ export default function LessonPage() {
                         });
                       }
                     }}
-                    className={formErrors.academicYear ? 'border-red-500' : ''}
+                    className=""
                     maxLength={9}
                   />
                   {formErrors.academicYear && (
                     <p className="flex items-center gap-1 text-sm text-red-600">
-                      <span>⚠</span> {formErrors.academicYear}
+                      <AlertTriangle className="h-4 w-4" />
+                      {formErrors.academicYear}
                     </p>
                   )}
                   {!formErrors.academicYear && (
@@ -1142,12 +1427,18 @@ export default function LessonPage() {
                   <Label htmlFor="semester">Semester *</Label>
                   <Select
                     value={syllabusForm.semester.toString()}
-                    onValueChange={(value) =>
+                    onValueChange={(value) => {
                       setSyllabusForm({
                         ...syllabusForm,
                         semester: parseInt(value) as Semester
-                      })
-                    }
+                      });
+                      if (formErrors.semester) {
+                        setFormErrors({
+                          ...formErrors,
+                          semester: undefined
+                        });
+                      }
+                    }}
                   >
                     <SelectTrigger id="semester">
                       <SelectValue />
@@ -1175,17 +1466,25 @@ export default function LessonPage() {
                   </Select>
                 </div>
               </div>
+              {/* Error message for Academic Year + Semester combination */}
+              {formErrors.yearSemesterCombo && (
+                <div
+                  key={errorShakeKey}
+                  className="animate-shake rounded-md border-2 border-red-400 bg-red-50 p-3"
+                >
+                  <p className="flex items-center gap-2 text-sm text-red-700">
+                    <AlertTriangle className="h-5 w-5 animate-pulse" />
+                    <span className="font-semibold">
+                      {formErrors.yearSemesterCombo}
+                    </span>
+                  </p>
+                </div>
+              )}
               <div className="space-y-2">
-                <Label htmlFor="description">
-                  Description {!editingSyllabus && '*'}
-                </Label>
+                <Label htmlFor="description">Description *</Label>
                 <Textarea
                   id="description"
-                  placeholder={
-                    editingSyllabus
-                      ? 'Enter syllabus description (optional)'
-                      : 'Enter syllabus description (required, minimum 1 character)'
-                  }
+                  placeholder="Enter syllabus description (required, minimum 1 character)"
                   value={syllabusForm.description}
                   onChange={(e) => {
                     setSyllabusForm({
@@ -1201,7 +1500,8 @@ export default function LessonPage() {
                 />
                 {formErrors.description && (
                   <p className="flex items-center gap-1 text-sm text-red-600">
-                    <span>⚠</span> {formErrors.description}
+                    <AlertTriangle className="h-4 w-4" />
+                    {formErrors.description}
                   </p>
                 )}
                 {!formErrors.description && syllabusForm.description && (
@@ -1243,7 +1543,13 @@ export default function LessonPage() {
                   updateSyllabusMutation.isPending) && (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 )}
-                {editingSyllabus ? 'Update' : 'Create'}
+                {createSyllabusMutation.isPending
+                  ? 'Creating...'
+                  : updateSyllabusMutation.isPending
+                    ? 'Updating...'
+                    : editingSyllabus
+                      ? 'Update'
+                      : 'Create'}
               </Button>
             </DialogFooter>
           </DialogContent>

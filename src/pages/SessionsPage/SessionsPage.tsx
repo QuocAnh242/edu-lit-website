@@ -48,7 +48,6 @@ import {
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
-  getAllSessions,
   createSession,
   updateSession,
   deleteSession,
@@ -58,11 +57,17 @@ import {
   UpdateSessionRequest
 } from '@/services/session.api';
 import { getCourseById, CourseDto } from '@/services/course.api';
+import { getAllSyllabuses } from '@/services/syllabus.api';
+import __helpers from '@/helpers';
 
 export default function SessionsPage() {
   const navigate = useNavigate();
   const { courseId } = useParams<{ courseId: string }>();
   const queryClient = useQueryClient();
+
+  // Get user role
+  const userRole = __helpers.getUserRole();
+  const canCreateSession = userRole === 'TEACHER' || userRole === 'ADMIN';
 
   // State
   const [sessionDialogOpen, setSessionDialogOpen] = useState(false);
@@ -99,37 +104,87 @@ export default function SessionsPage() {
 
   const course = courseData?.data as CourseDto | undefined;
 
-  // Fetch sessions for this course
-  const {
-    data: sessionsData,
-    isLoading: loadingSessions,
-    isError: sessionsError
-  } = useQuery({
-    queryKey: ['sessions', courseId, searchTerm],
+  // Fetch syllabuses (which include courses with sessions)
+  const { data: syllabusesData } = useQuery({
+    queryKey: ['syllabuses-with-sessions'],
     queryFn: async () => {
-      if (!courseId) throw new Error('Course ID is required');
-      return await getAllSessions({
+      const response = await getAllSyllabuses({
         pageNumber: 1,
-        pageSize: 100,
-        courseId: courseId,
-        searchTerm: searchTerm || undefined
+        pageSize: 1000,
+        isActive: undefined
       });
+      return response;
+    }
+  });
+
+  // BACKUP: Also fetch sessions directly in case syllabuses don't have them populated
+  const { data: directSessionsData } = useQuery({
+    queryKey: ['direct-sessions', courseId],
+    queryFn: async () => {
+      if (!courseId) return { data: { items: [] } };
+      // This would be a direct sessions API call if available
+      return { data: { items: [] } }; // Placeholder for now
     },
     enabled: !!courseId
   });
 
+  // Extract sessions from courses in syllabuses
+  const allSessions = useMemo(() => {
+    return (syllabusesData?.data?.items || []).flatMap((syllabus: any) =>
+      (syllabus.courses || []).flatMap((course: any) =>
+        (course.sessions || []).map((session: any) => ({
+          id: session.sessionId || session.session_id || '',
+          courseId: course.courseId || course.course_id || '',
+          title: session.title || '',
+          description: session.description || '',
+          position: session.position || 0,
+          durationMinutes:
+            session.durationMinutes || session.duration_minutes || undefined,
+          createdAt: session.createdAt || session.created_at || '',
+          updatedAt: session.updatedAt || session.updated_at || ''
+        }))
+      )
+    );
+  }, [syllabusesData?.data?.items]);
+
+  // Filter sessions by courseId and search term
   const sessions = useMemo(() => {
-    return (sessionsData?.data?.items || []) as SessionDto[];
-  }, [sessionsData?.data?.items]);
+    let filtered = allSessions.filter((s: any) => s.courseId === courseId);
+
+    if (searchTerm) {
+      filtered = filtered.filter(
+        (s: any) =>
+          s.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          s.description?.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+
+    return filtered;
+  }, [allSessions, courseId, searchTerm]);
+
+  const loadingSessions = false;
+  const sessionsError = false;
 
   // Mutations
   const createSessionMutation = useMutation({
     mutationFn: async (data: CreateSessionRequest) => {
       return await createSession(data);
     },
-    onSuccess: () => {
-      toast.success('Session created successfully');
-      queryClient.invalidateQueries({ queryKey: ['sessions'] });
+    onSuccess: async () => {
+      toast.success('Session created successfully! 🎉');
+
+      // Wait for CQRS event propagation
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+
+      // Refetch both queries
+      await queryClient.refetchQueries({
+        queryKey: ['syllabuses-with-sessions'],
+        exact: false,
+        type: 'active'
+      });
+
+      toast.success('Sessions refreshed! 🔄');
+
       setSessionDialogOpen(false);
       resetSessionForm();
     },
@@ -165,7 +220,7 @@ export default function SessionsPage() {
     },
     onSuccess: () => {
       toast.success('Session updated successfully');
-      queryClient.invalidateQueries({ queryKey: ['sessions'] });
+      queryClient.invalidateQueries({ queryKey: ['syllabuses-with-sessions'] });
       setSessionDialogOpen(false);
       setEditingSession(null);
       resetSessionForm();
@@ -196,7 +251,7 @@ export default function SessionsPage() {
     },
     onSuccess: () => {
       toast.success('Session deleted successfully');
-      queryClient.invalidateQueries({ queryKey: ['sessions'] });
+      queryClient.invalidateQueries({ queryKey: ['syllabuses-with-sessions'] });
       setDeleteDialogOpen(false);
       setSessionToDelete(null);
     },
@@ -212,21 +267,19 @@ export default function SessionsPage() {
 
   // Handlers
   const handleCreateSession = () => {
+    // Navigate to CreateSessionPage instead of opening dialog
+    navigate(`/courses/${courseId}/create-session`);
+  };
+
+  const handleCreateSessionDialog = () => {
     setEditingSession(null);
     resetSessionForm();
     setSessionDialogOpen(true);
   };
 
   const handleEditSession = (session: SessionDto) => {
-    setEditingSession(session);
-    setSessionForm({
-      courseId: session.courseId,
-      title: session.title,
-      description: session.description || '',
-      position: session.position,
-      durationMinutes: session.durationMinutes
-    });
-    setSessionDialogOpen(true);
+    // Navigate to EditSessionPage instead of opening dialog
+    navigate(`/courses/${courseId}/sessions/${session.id}/edit`);
   };
 
   const handleDeleteSession = (session: SessionDto) => {
@@ -234,19 +287,9 @@ export default function SessionsPage() {
     setDeleteDialogOpen(true);
   };
 
-  const handleViewSession = async (session: SessionDto) => {
-    try {
-      const response = await getSessionById(session.id);
-      if (response.success && response.data) {
-        setViewingSession(response.data);
-        setViewDialogOpen(true);
-      } else {
-        toast.error('Failed to load session details');
-      }
-    } catch (error) {
-      console.error('Error fetching session details:', error);
-      toast.error('Failed to load session details');
-    }
+  const handleViewSession = (session: SessionDto) => {
+    // Navigate to ViewSessionPage to display curriculum format
+    navigate(`/courses/${courseId}/sessions/${session.id}`);
   };
 
   const handleViewLessonContexts = (session: SessionDto) => {
@@ -396,13 +439,15 @@ export default function SessionsPage() {
                   </p>
                 )}
               </div>
-              <Button
-                onClick={handleCreateSession}
-                className="gap-2 bg-gradient-to-r from-purple-600 to-pink-600 shadow-lg transition-all duration-300 hover:scale-105 hover:from-purple-700 hover:to-pink-700 hover:shadow-xl"
-              >
-                <Plus className="h-5 w-5" />
-                Create Session
-              </Button>
+              {canCreateSession && (
+                <Button
+                  onClick={handleCreateSession}
+                  className="gap-2 bg-gradient-to-r from-purple-600 to-pink-600 shadow-lg transition-all duration-300 hover:scale-105 hover:from-purple-700 hover:to-pink-700 hover:shadow-xl"
+                >
+                  <Plus className="h-5 w-5" />
+                  Create Session
+                </Button>
+              )}
             </div>
           </div>
 
@@ -463,7 +508,9 @@ export default function SessionsPage() {
                   </p>
                   <Button
                     onClick={() =>
-                      queryClient.invalidateQueries({ queryKey: ['sessions'] })
+                      queryClient.invalidateQueries({
+                        queryKey: ['syllabuses-with-sessions']
+                      })
                     }
                     variant="outline"
                     className="gap-2"
@@ -482,7 +529,7 @@ export default function SessionsPage() {
                       ? 'No sessions found matching your search.'
                       : 'Get started by creating your first session'}
                   </p>
-                  {!searchTerm && (
+                  {!searchTerm && canCreateSession && (
                     <Button onClick={handleCreateSession} className="gap-2">
                       <Plus className="h-4 w-4" />
                       Create First Session

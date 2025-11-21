@@ -40,12 +40,12 @@ import {
   BookOpen,
   Edit,
   Trash2,
-  Eye,
   Loader2,
-  Search
+  Search,
+  AlertTriangle
 } from 'lucide-react';
 import {
-  getAllCourses,
+  getCoursesBySyllabusId,
   createCourse,
   updateCourse,
   deleteCourse,
@@ -67,6 +67,8 @@ import {
   SelectValue
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { GraduationCap, Eye } from 'lucide-react';
+import __helpers from '@/helpers';
 
 const CoursePage = () => {
   const navigate = useNavigate();
@@ -81,6 +83,13 @@ const CoursePage = () => {
   const [viewingCourse, setViewingCourse] = useState<CourseDto | null>(null);
   const [courseToDelete, setCourseToDelete] = useState<CourseDto | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Get user role
+  const userRole = __helpers.getUserRole();
+  const isTeacher = () => {
+    return userRole === 'ADMIN' || userRole === 'TEACHER';
+  };
+
   const [courseForm, setCourseForm] = useState<CreateCourseRequest>({
     syllabusId: '',
     courseCode: '',
@@ -135,15 +144,15 @@ const CoursePage = () => {
     }
   }, [searchParams, setSearchParams]);
 
-  // Fetch syllabuses for dropdown
+  // Fetch syllabuses (which include courses) for both dropdown and course list
   const { data: syllabusesData, isLoading: loadingSyllabuses } = useQuery({
-    queryKey: ['syllabuses'],
+    queryKey: ['syllabuses-with-courses'],
     queryFn: async () => {
       try {
         const response = await getAllSyllabuses({
           pageNumber: 1,
           pageSize: 1000,
-          isActive: true
+          isActive: undefined // Get all to show courses from inactive syllabuses too
         });
         return response;
       } catch (error) {
@@ -167,34 +176,79 @@ const CoursePage = () => {
 
   const syllabuses = (syllabusesData?.data?.items || []) as SyllabusDto[];
 
-  // Fetch courses
-  const {
-    data: coursesData,
-    isLoading: loadingCourses,
-    isError: coursesError
-  } = useQuery({
-    queryKey: ['courses', searchTerm],
-    queryFn: async () => {
-      const response = await getAllCourses({
-        pageNumber: 1,
-        pageSize: 100,
-        searchTerm: searchTerm || undefined
-      });
-      return response;
-    }
-  });
+  // Extract all courses from syllabuses
+  const allCourses = (syllabusesData?.data?.items || []).flatMap(
+    (syllabus: any) =>
+      (syllabus.courses || []).map((course: any) => ({
+        id: course.courseId || course.course_id || '',
+        syllabusId: syllabus.id,
+        syllabusTitle: syllabus.title || '',
+        courseCode: course.courseCode || course.course_code || '',
+        title: course.title || '',
+        description: course.description || '',
+        orderIndex: course.orderIndex || course.order_index || 0,
+        durationWeeks: course.durationWeeks || course.duration_weeks || 0,
+        isActive: course.isActive ?? course.is_active ?? true,
+        createdAt: course.createdAt || course.created_at || '',
+        updatedAt: course.updatedAt || course.updated_at || ''
+      }))
+  );
 
-  const courses = (coursesData?.data?.items || []) as CourseDto[];
+  // Filter by search term
+  const courses = searchTerm
+    ? allCourses.filter(
+        (c: any) =>
+          c.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          c.courseCode?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          c.description?.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    : allCourses;
+
+  const loadingCourses = false;
+  const coursesError = false;
 
   // Mutations
   const createCourseMutation = useMutation({
     mutationFn: async (data: CreateCourseRequest) => {
+      console.log('🔄 [CREATE COURSE] Sending request...', data);
       return await createCourse(data);
     },
-    onSuccess: () => {
-      toast.success('Course created successfully');
-      queryClient.invalidateQueries({ queryKey: ['courses'] });
-      queryClient.invalidateQueries({ queryKey: ['syllabuses'] }); // Invalidate to refresh course counts
+    onSuccess: async (data) => {
+      console.log('🎉 [CREATE COURSE SUCCESS] Course created!', data);
+
+      // Show success toast immediately
+      toast.success('Course created successfully! 🎉', {
+        duration: 3000,
+        position: 'top-center'
+      });
+
+      console.log(
+        '🔄 [CREATE COURSE SUCCESS] Waiting for CQRS event propagation...'
+      );
+
+      // Wait for event to propagate: Command Service → RabbitMQ → Query Service → MongoDB
+      // CQRS architecture with event sourcing can take up to 5 seconds
+      await new Promise((resolve) => setTimeout(resolve, 5000)); // 5 seconds delay
+
+      console.log('🔄 [CREATE COURSE SUCCESS] Refetching queries...');
+
+      // AWAIT refetch to ensure data is fresh before closing dialog
+      await queryClient.refetchQueries({
+        queryKey: ['syllabuses-with-courses'],
+        exact: false,
+        type: 'active'
+      });
+      await queryClient.refetchQueries({
+        queryKey: ['syllabuses'],
+        exact: false,
+        type: 'active'
+      });
+
+      console.log(
+        '✅ [CREATE COURSE SUCCESS] Refetch completed, data is fresh'
+      );
+
+      // Close dialog AFTER refetch completes
       setCourseDialogOpen(false);
       resetCourseForm();
     },
@@ -278,11 +332,42 @@ const CoursePage = () => {
       id: string;
       data: UpdateCourseRequest;
     }) => {
+      console.log('🔄 [UPDATE COURSE] Sending request...', { id, data });
       return await updateCourse(id, data);
     },
-    onSuccess: () => {
-      toast.success('Course updated successfully');
-      queryClient.invalidateQueries({ queryKey: ['courses'] });
+    onSuccess: async (data) => {
+      console.log('🎉 [UPDATE COURSE SUCCESS] Course updated!', data);
+
+      // Show success toast immediately
+      toast.success('Course updated successfully! ✅', {
+        duration: 3000,
+        position: 'top-center'
+      });
+
+      console.log(
+        '🔄 [UPDATE COURSE SUCCESS] Waiting for CQRS event propagation...'
+      );
+
+      // Wait for event to propagate
+      await new Promise((resolve) => setTimeout(resolve, 5000)); // 5 seconds delay
+
+      console.log('🔄 [UPDATE COURSE SUCCESS] Refetching queries...');
+
+      // AWAIT refetch to ensure data is fresh
+      await queryClient.refetchQueries({
+        queryKey: ['syllabuses-with-courses'],
+        exact: false,
+        type: 'active'
+      });
+      await queryClient.refetchQueries({
+        queryKey: ['syllabuses'],
+        exact: false,
+        type: 'active'
+      });
+
+      console.log('✅ [UPDATE COURSE SUCCESS] Refetch completed');
+
+      // Close dialog AFTER refetch
       setCourseDialogOpen(false);
       setEditingCourse(null);
       resetCourseForm();
@@ -336,11 +421,42 @@ const CoursePage = () => {
 
   const deleteCourseMutation = useMutation({
     mutationFn: async (courseId: string) => {
+      console.log('🔄 [DELETE COURSE] Sending request...', courseId);
       return await deleteCourse(courseId);
     },
-    onSuccess: () => {
-      toast.success('Course deleted successfully');
-      queryClient.invalidateQueries({ queryKey: ['courses'] });
+    onSuccess: async (data) => {
+      console.log('🎉 [DELETE COURSE SUCCESS] Course deleted!', data);
+
+      // Show success toast immediately
+      toast.success('Course deleted successfully! 🗑️', {
+        duration: 3000,
+        position: 'top-center'
+      });
+
+      console.log(
+        '🔄 [DELETE COURSE SUCCESS] Waiting for CQRS event propagation...'
+      );
+
+      // Wait for event to propagate
+      await new Promise((resolve) => setTimeout(resolve, 5000)); // 5 seconds delay
+
+      console.log('🔄 [DELETE COURSE SUCCESS] Refetching queries...');
+
+      // AWAIT refetch to ensure data is fresh
+      await queryClient.refetchQueries({
+        queryKey: ['syllabuses-with-courses'],
+        exact: false,
+        type: 'active'
+      });
+      await queryClient.refetchQueries({
+        queryKey: ['syllabuses'],
+        exact: false,
+        type: 'active'
+      });
+
+      console.log('✅ [DELETE COURSE SUCCESS] Refetch completed');
+
+      // Close dialog AFTER refetch
       setDeleteDialogOpen(false);
       setCourseToDelete(null);
     },
@@ -350,7 +466,10 @@ const CoursePage = () => {
           ?.data?.message ||
         (error as { message?: string })?.message ||
         'Failed to delete course';
-      toast.error(errorMessage);
+      toast.error(errorMessage, {
+        duration: 5000
+      });
+      console.error('❌ [DELETE COURSE ERROR]', error);
     }
   });
 
@@ -380,22 +499,6 @@ const CoursePage = () => {
   const handleViewCourse = async (course: CourseDto) => {
     // Navigate to sessions page for this course
     navigate(`/course/${course.id}/sessions`);
-  };
-
-  const handleViewCourseDetails = async (course: CourseDto) => {
-    try {
-      // Fetch full course details
-      const response = await getCourseById(course.id);
-      if (response.success && response.data) {
-        setViewingCourse(response.data);
-        setViewDialogOpen(true);
-      } else {
-        toast.error('Failed to load course details');
-      }
-    } catch (error) {
-      console.error('Error fetching course details:', error);
-      toast.error('Failed to load course details');
-    }
   };
 
   const validateCourseForm = (): {
@@ -466,6 +569,15 @@ const CoursePage = () => {
       title: courseForm.title.trim(),
       description: courseForm.description?.trim() || ''
     };
+
+    console.log('📋 [FORM DATA] Before trim:', {
+      courseCode: `"${courseForm.courseCode}"`,
+      length: courseForm.courseCode.length
+    });
+    console.log('📋 [DATA TO SEND] After trim:', {
+      courseCode: `"${dataToSend.courseCode}"`,
+      length: dataToSend.courseCode.length
+    });
 
     // For creation, check if a course with the same CourseCode in the same Syllabus already exists
     if (!editingCourse) {
@@ -572,14 +684,29 @@ const CoursePage = () => {
                 Manage your courses and learning materials
               </p>
             </div>
-            <Button
-              onClick={handleCreateCourse}
-              className="gap-2 bg-gradient-to-r from-cyan-600 to-blue-600 shadow-lg transition-all duration-300 hover:scale-105 hover:from-cyan-700 hover:to-blue-700 hover:shadow-xl"
-            >
-              <Plus className="h-5 w-5" />
-              Create Course
-            </Button>
+            {isTeacher() && (
+              <Button
+                onClick={handleCreateCourse}
+                className="gap-2 bg-gradient-to-r from-cyan-600 to-blue-600 shadow-lg transition-all duration-300 hover:scale-105 hover:from-cyan-700 hover:to-blue-700 hover:shadow-xl"
+              >
+                <Plus className="h-5 w-5" />
+                Create Course
+              </Button>
+            )}
           </div>
+
+          {/* Role Badge */}
+          {!isTeacher() && (
+            <div className="mb-6 flex items-center gap-4">
+              <Badge
+                variant="secondary"
+                className="border-green-300 bg-green-100 text-base text-green-800 transition-all duration-200 hover:scale-105"
+              >
+                <GraduationCap className="mr-1 h-4 w-4" />
+                Student View
+              </Badge>
+            </div>
+          )}
 
           {/* Search Bar */}
           <Card
@@ -606,7 +733,13 @@ const CoursePage = () => {
             className="animate-slide-in shadow-lg transition-all duration-300 hover:shadow-2xl"
             style={{ animationDelay: '0.2s', opacity: 0 }}
           >
-            <CardHeader className="bg-gradient-to-r from-cyan-600 to-blue-600 text-white">
+            <CardHeader
+              className={`text-white ${
+                isTeacher()
+                  ? 'bg-gradient-to-r from-cyan-600 to-blue-600'
+                  : 'bg-gradient-to-r from-green-600 to-emerald-600'
+              }`}
+            >
               <CardTitle className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <BookOpen className="h-5 w-5 transition-transform hover:scale-110" />
@@ -654,9 +787,11 @@ const CoursePage = () => {
                   <p className="mb-4 text-gray-500">
                     {searchTerm
                       ? 'No courses found matching your search.'
-                      : 'Get started by creating your first course'}
+                      : isTeacher()
+                        ? 'Get started by creating your first course'
+                        : 'No courses available yet'}
                   </p>
-                  {!searchTerm && (
+                  {!searchTerm && isTeacher() && (
                     <Button onClick={handleCreateCourse} className="gap-2">
                       <Plus className="h-4 w-4" />
                       Create First Course
@@ -670,7 +805,7 @@ const CoursePage = () => {
                       <TableHead className="w-[25%]">Title</TableHead>
                       <TableHead>Course Code</TableHead>
                       <TableHead>Description</TableHead>
-                      <TableHead>Syllabus ID</TableHead>
+                      <TableHead>Syllabus</TableHead>
                       <TableHead>Created</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
@@ -697,8 +832,9 @@ const CoursePage = () => {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <div className="font-mono text-xs text-gray-500">
-                            {course.syllabusId.substring(0, 8)}...
+                          <div className="text-sm text-gray-700">
+                            {(course as any).syllabusTitle ||
+                              'Unknown Syllabus'}
                           </div>
                         </TableCell>
                         <TableCell className="text-sm text-gray-500">
@@ -713,43 +849,40 @@ const CoursePage = () => {
                               size="icon"
                               onClick={() => handleViewCourse(course)}
                               className="transition-all duration-200 hover:scale-110 hover:bg-purple-50"
-                              title="Manage sessions"
+                              title={
+                                isTeacher() ? 'Manage sessions' : 'View course'
+                              }
                             >
-                              <BookOpen className="h-4 w-4 text-purple-600" />
+                              <Eye className="h-4 w-4 text-purple-600" />
                             </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleViewCourseDetails(course)}
-                              className="transition-all duration-200 hover:scale-110 hover:bg-blue-50"
-                              title="View course details"
-                            >
-                              <Eye className="h-4 w-4 text-blue-600" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleEditCourse(course)}
-                              className="transition-all duration-200 hover:scale-110 hover:bg-green-50"
-                              title="Edit course"
-                            >
-                              <Edit className="h-4 w-4 text-green-600" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleDeleteCourse(course)}
-                              disabled={deleteCourseMutation.isPending}
-                              className="transition-all duration-200 hover:scale-110 hover:bg-red-50"
-                              title="Delete course"
-                            >
-                              {deleteCourseMutation.isPending &&
-                              courseToDelete?.id === course.id ? (
-                                <Loader2 className="h-4 w-4 animate-spin text-red-500" />
-                              ) : (
-                                <Trash2 className="h-4 w-4 text-red-500" />
-                              )}
-                            </Button>
+                            {isTeacher() && (
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleEditCourse(course)}
+                                  className="transition-all duration-200 hover:scale-110 hover:bg-green-50"
+                                  title="Edit course"
+                                >
+                                  <Edit className="h-4 w-4 text-green-600" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleDeleteCourse(course)}
+                                  disabled={deleteCourseMutation.isPending}
+                                  className="transition-all duration-200 hover:scale-110 hover:bg-red-50"
+                                  title="Delete course"
+                                >
+                                  {deleteCourseMutation.isPending &&
+                                  courseToDelete?.id === course.id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin text-red-500" />
+                                  ) : (
+                                    <Trash2 className="h-4 w-4 text-red-500" />
+                                  )}
+                                </Button>
+                              </>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -760,8 +893,34 @@ const CoursePage = () => {
             </CardContent>
           </Card>
 
+          {/* Student View Info */}
+          {!isTeacher() && courses.length > 0 && (
+            <div className="mt-8">
+              <Card className="border-green-200 bg-gradient-to-r from-green-50 to-emerald-50 shadow-md">
+                <CardContent className="p-6">
+                  <div className="flex items-start gap-3">
+                    <div className="rounded-full bg-green-100 p-2">
+                      <GraduationCap className="h-5 w-5 text-green-600" />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="mb-1 text-base font-semibold text-green-800">
+                        Student View
+                      </h3>
+                      <p className="text-sm text-green-700">
+                        Use the{' '}
+                        <Eye className="mx-1 inline h-4 w-4 text-green-600" />{' '}
+                        icon to view course details and access learning
+                        materials.
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
           {/* Stats Cards */}
-          {!loadingCourses && courses.length > 0 && (
+          {!loadingCourses && courses.length > 0 && isTeacher() && (
             <div className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-3">
               <Card
                 className="animate-scale-in border-cyan-200 bg-gradient-to-br from-cyan-50 to-cyan-100 transition-all duration-300 hover:scale-105 hover:shadow-lg"
@@ -864,7 +1023,8 @@ const CoursePage = () => {
                 />
                 {formErrors.title && (
                   <p className="flex items-center gap-1 text-sm text-red-600">
-                    <span>⚠</span> {formErrors.title}
+                    <AlertTriangle className="h-4 w-4" />
+                    {formErrors.title}
                   </p>
                 )}
                 {!formErrors.title && courseForm.title && (
@@ -893,7 +1053,8 @@ const CoursePage = () => {
                 />
                 {formErrors.courseCode && (
                   <p className="flex items-center gap-1 text-sm text-red-600">
-                    <span>⚠</span> {formErrors.courseCode}
+                    <AlertTriangle className="h-4 w-4" />
+                    {formErrors.courseCode}
                   </p>
                 )}
                 {!formErrors.courseCode && courseForm.courseCode && (
@@ -969,7 +1130,8 @@ const CoursePage = () => {
                 </Select>
                 {formErrors.syllabusId && (
                   <p className="flex items-center gap-1 text-sm text-red-600">
-                    <span>⚠</span> {formErrors.syllabusId}
+                    <AlertTriangle className="h-4 w-4" />
+                    {formErrors.syllabusId}
                   </p>
                 )}
                 {syllabuses.length === 0 &&
@@ -1002,7 +1164,8 @@ const CoursePage = () => {
                 />
                 {formErrors.description && (
                   <p className="flex items-center gap-1 text-sm text-red-600">
-                    <span>⚠</span> {formErrors.description}
+                    <AlertTriangle className="h-4 w-4" />
+                    {formErrors.description}
                   </p>
                 )}
                 {!formErrors.description && courseForm.description && (
@@ -1039,7 +1202,13 @@ const CoursePage = () => {
                   updateCourseMutation.isPending) && (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 )}
-                {editingCourse ? 'Update' : 'Create'}
+                {createCourseMutation.isPending
+                  ? 'Creating...'
+                  : updateCourseMutation.isPending
+                    ? 'Updating...'
+                    : editingCourse
+                      ? 'Update'
+                      : 'Create'}
               </Button>
             </DialogFooter>
           </DialogContent>
